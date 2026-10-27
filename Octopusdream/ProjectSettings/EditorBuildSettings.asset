@@ -6,6 +6,12 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/WOC/Scenes/WOC_Ct_Building_Park.unity
+    guid: 4cb38c07861f38040a2ece725e3a8cb1
+  - enabled: 1
+    path: Assets/Octopusdream/Scenes/OctopusShapeLab.unity
+    guid: b3fa6f07b95b4284ae487632fcc41b98
+  - enabled: 1
     path: Assets/Scenes/SampleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   m_configObjects:
