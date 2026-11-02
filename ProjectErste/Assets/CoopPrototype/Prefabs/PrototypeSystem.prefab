@@ -49,10 +49,15 @@ MonoBehaviour:
   moveSpeed: 5
   moveAcceleration: 35
   jumpImpulse: 7
-  dashImpulse: 6
+  maxJumpMultiplier: 1.5
+  jumpHoldTime: 0.3
+  dashSpeed: 16
+  dashDuration: 0.105
+  dashStopSpeedRatio: 0.15
   dashCooldown: 0.65
   playerMass: 1
   ballMass: 1.2
+  ballBounciness: 0.75
   gravityScale: 2
   snapshotsPerSecond: 20
   peerTimeout: 12

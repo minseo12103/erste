@@ -16,6 +16,8 @@ namespace ShapeCoop
         readonly PrototypeClock clock = new PrototypeClock();
         double elapsed, nextSnapshot; bool completed; int epoch, snapshotSequence, lastSnapshot;
         int jump, dash, freeze; float inputMove; Vector2 roomScroll;
+        double pendingDashAt = -1;
+        PhysicsMaterial2D ballMaterial;
         GUIStyle title, label;
         void Awake() { settings = GetComponent<PrototypeSettings>(); session = GetComponent<SteamSession>(); session.Received += Receive; }
         void Update()
@@ -39,11 +41,14 @@ namespace ShapeCoop
             }
             var keyboard = Keyboard.current;
             if (keyboard == null) return;
-            inputMove = (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0);
-            if (keyboard.spaceKey.wasPressedThisFrame) jump++;
-            if (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame) dash++;
-            if (keyboard.fKey.wasPressedThisFrame) freeze++;
-            var input = new Packet { kind = "input", epoch = epoch, move = inputMove, jump = jump, dash = dash, freeze = freeze };
+            bool overlay = session.OverlayActive;
+            inputMove = overlay ? 0 : (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0);
+            if (!overlay && keyboard.spaceKey.wasPressedThisFrame) jump++;
+            if (!overlay && (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame)) pendingDashAt = Time.realtimeSinceStartupAsDouble + .15;
+            if (overlay || keyboard.tabKey.isPressed) pendingDashAt = -1;
+            if (pendingDashAt >= 0 && Time.realtimeSinceStartupAsDouble >= pendingDashAt) { dash++; pendingDashAt = -1; }
+            if (!overlay && keyboard.fKey.wasPressedThisFrame) freeze++;
+            var input = new Packet { kind = "input", epoch = epoch, move = inputMove, jump = jump, jumpHeld = !overlay && keyboard.spaceKey.isPressed, dash = dash, freeze = freeze };
             if (session.IsHost) ApplyInput(session.Self, input); else session.Send(session.Host, input);
         }
         void RemoveDisconnected()
@@ -61,6 +66,7 @@ namespace ShapeCoop
         {
             if (!session.IsHost || p.epoch != epoch || !players.TryGetValue(from.m_SteamID.ToString(), out var player)) return;
             player.move = Mathf.Clamp(p.move, -1, 1);
+            player.jumpHeld = p.jumpHeld;
             if (p.jump > player.lastJump) { player.lastJump = p.jump; player.jumpPending = true; }
             if (p.dash > player.lastDash) { player.lastDash = p.dash; player.dashPending = true; }
             if (p.freeze > player.lastFreeze) { player.lastFreeze = p.freeze; player.freezePending = true; }
@@ -81,7 +87,7 @@ namespace ShapeCoop
             if (!session.Playing || (p.kind != "state" && p.kind != "reset" && p.kind != "complete")) return;
             if (p.epoch < epoch || (p.epoch == epoch && p.sequence <= lastSnapshot)) return;
             bool snap = p.epoch != epoch || p.kind == "reset";
-            if (p.epoch != epoch) { epoch = p.epoch; jump = dash = freeze = 0; inputMove = 0; }
+            if (p.epoch != epoch) { epoch = p.epoch; jump = dash = freeze = 0; inputMove = 0; pendingDashAt = -1; }
             ApplyState(p, snap);
         }
         void StartGame()
@@ -111,7 +117,9 @@ namespace ShapeCoop
             var goalScript = goal.AddComponent<PrototypeGoal>(); goalScript.game = this;
             var ballGo = new GameObject("Goal ball"); ballGo.transform.SetParent(world.transform);
             ball = ballGo.AddComponent<Rigidbody2D>(); ball.mass = settings.ballMass; ball.gravityScale = settings.gravityScale; ball.interpolation = RigidbodyInterpolation2D.Interpolate; ball.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            ballGo.AddComponent<CircleCollider2D>().radius = .6f;
+            var ballCollider = ballGo.AddComponent<CircleCollider2D>(); ballCollider.radius = .6f;
+            ballMaterial = CreateBallMaterial(settings);
+            ballCollider.sharedMaterial = ballMaterial;
             PrototypeVisuals.Shape(ballGo.transform, 2, new Color(1f,.8f,.08f), new Vector2(1.2f,1.2f), 1);
             var center = PrototypeVisuals.Shape(ballGo.transform, 2, new Color(.35f,.22f,.05f), new Vector2(.25f,.25f), 2);
             if (!host) ball.simulated = false;
@@ -123,7 +131,8 @@ namespace ShapeCoop
             }
             ResetPositions();
         }
-        void ClearWorld() { if (world != null) Destroy(world); world = null; players.Clear(); ball = null; }
+        void ClearWorld() { if (world != null) Destroy(world); if (ballMaterial != null) Destroy(ballMaterial); ballMaterial = null; world = null; players.Clear(); ball = null; pendingDashAt = -1; }
+        public static PhysicsMaterial2D CreateBallMaterial(PrototypeSettings s) => new PhysicsMaterial2D("Goal ball bounce") { bounciness = Mathf.Clamp01(s.ballBounciness), friction = .2f };
         void ResetPositions()
         {
             foreach (var player in players.Values) player.ResetBody();
@@ -134,7 +143,7 @@ namespace ShapeCoop
         void Restart()
         {
             if (!session.IsHost || !session.Playing) return;
-            epoch++; snapshotSequence = 0; jump = dash = freeze = 0; inputMove = 0; ResetPositions();
+            epoch++; snapshotSequence = 0; jump = dash = freeze = 0; inputMove = 0; pendingDashAt = -1; ResetPositions();
             session.Broadcast(Snapshot("reset"));
         }
         public void BallReachedGoal(Collider2D other)
@@ -174,6 +183,7 @@ namespace ShapeCoop
             else
             {
                 GUILayout.Label("SHAPE CO-OP", title); GUILayout.Label(session.Status, label);
+                if (session.Available) GUILayout.Label(session.OverlayReady ? "Steam overlay: ready (Shift + Tab)" : "Steam overlay unavailable or loading. Enable it in Steam and launch the build through Steam.", label);
                 if (!session.InLobby)
                 {
                     GUI.enabled = session.Available;
@@ -196,6 +206,9 @@ namespace ShapeCoop
                         string state = session.DisplayState(member);
                         GUILayout.Label(SteamFriends.GetFriendPersonaName(member) + (member == session.Host ? " [HOST]" : "") + " - " + state, label);
                     }
+                    GUI.enabled = session.OverlayReady;
+                    if (GUILayout.Button("Invite Steam friends", GUILayout.Height(30))) session.InviteFriends();
+                    GUI.enabled = true;
                     if (session.IsHost) { GUI.enabled = session.CanStart(); if (GUILayout.Button("Start game", GUILayout.Height(36))) StartGame(); GUI.enabled = true; }
                     else GUILayout.Label("Waiting for host", label);
                     if (GUILayout.Button("Leave room", GUILayout.Height(30))) session.Leave();

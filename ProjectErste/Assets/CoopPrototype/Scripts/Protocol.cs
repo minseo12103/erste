@@ -8,6 +8,7 @@ namespace ShapeCoop
         public int epoch, sequence;
         public float move;
         public int jump, dash, freeze;
+        public bool jumpHeld;
         public double elapsed;
         public bool completed;
         public PlayerData[] players;

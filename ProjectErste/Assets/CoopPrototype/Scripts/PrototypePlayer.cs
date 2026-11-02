@@ -14,9 +14,11 @@ namespace ShapeCoop
         public float targetAngle;
         public float move;
         public bool jumpPending, dashPending, freezePending;
+        public bool jumpHeld;
         public int lastJump, lastDash, lastFreeze;
-        int facing = 1;
+        int facing = 1, dashDirection = 1;
         float nextDash;
+        float dashRemaining, jumpBoostRemaining;
         PrototypeSettings settings;
         bool authority;
 
@@ -42,8 +44,10 @@ namespace ShapeCoop
         }
         public void ResetBody()
         {
-            frozen = false; move = 0; jumpPending = dashPending = freezePending = false;
-            facing = 1; nextDash = 0; lastJump = lastDash = lastFreeze = 0;
+            frozen = false; move = 0; jumpPending = dashPending = freezePending = jumpHeld = false;
+            dashRemaining = jumpBoostRemaining = 0;
+            facing = dashDirection = 1; nextDash = 0; lastJump = lastDash = lastFreeze = 0;
+            body.gravityScale = settings.gravityScale;
             if (authority) { body.bodyType = RigidbodyType2D.Dynamic; body.position = spawn; body.rotation = 0; body.linearVelocity = Vector2.zero; body.angularVelocity = 0; }
             else { transform.position = spawn; transform.rotation = Quaternion.identity; }
             targetPosition = spawn; targetAngle = 0;
@@ -60,18 +64,58 @@ namespace ShapeCoop
             if (freezePending)
             {
                 freezePending = false; frozen = !frozen;
+                jumpBoostRemaining = dashRemaining = 0;
+                body.gravityScale = settings.gravityScale;
                 body.linearVelocity = Vector2.zero; body.angularVelocity = 0;
                 body.bodyType = frozen ? RigidbodyType2D.Kinematic : RigidbodyType2D.Dynamic;
             }
             if (frozen) { jumpPending = dashPending = false; return; }
             if (Mathf.Abs(move) > .01f) facing = move < 0 ? -1 : 1;
+            // Process a jump first so a dash on the same physics tick keeps it.
+            if (jumpPending && Grounded())
+            {
+                body.AddForce(Vector2.up * settings.jumpImpulse, ForceMode2D.Impulse);
+                jumpBoostRemaining = settings.jumpHoldTime;
+            }
+            if (!jumpHeld || body.linearVelocity.y < 0) jumpBoostRemaining = 0;
+            if (jumpBoostRemaining > 0)
+            {
+                float duration = Mathf.Min(jumpBoostRemaining, Time.fixedDeltaTime);
+                float fraction = duration / Mathf.Max(.02f, settings.jumpHoldTime);
+                body.AddForce(Vector2.up * settings.jumpImpulse * (Mathf.Clamp(settings.maxJumpMultiplier, 1f, 1.5f) - 1f) * fraction, ForceMode2D.Impulse);
+                jumpBoostRemaining -= duration;
+            }
+            bool dashStarted = false;
+            if (dashPending && dashRemaining <= 0 && Time.time >= nextDash)
+            {
+                dashDirection = facing;
+                dashRemaining = Mathf.Max(Time.fixedDeltaTime, settings.dashDuration);
+                body.linearVelocity = new Vector2(dashDirection * Mathf.Max(0, settings.dashSpeed), body.linearVelocity.y);
+                nextDash = Time.time + settings.dashCooldown;
+                dashStarted = true;
+            }
+            if (dashRemaining > 0)
+            {
+                // Once started, let the physics solver change velocity on impact.
+                // An obstacle that stops or reverses us ends the dash early.
+                float stopSpeed = Mathf.Max(.01f, settings.dashSpeed * Mathf.Clamp01(settings.dashStopSpeedRatio));
+                if (!dashStarted && body.linearVelocity.x * dashDirection <= stopSpeed)
+                {
+                    dashRemaining = 0;
+                    jumpPending = dashPending = false;
+                    return;
+                }
+                dashRemaining = Mathf.Max(0, dashRemaining - Time.fixedDeltaTime);
+                jumpPending = dashPending = false;
+                return;
+            }
+            body.gravityScale = settings.gravityScale;
             Vector2 v = body.linearVelocity;
             v.x = Mathf.MoveTowards(v.x, move * settings.moveSpeed, settings.moveAcceleration * Time.fixedDeltaTime);
             body.linearVelocity = v;
-            if (jumpPending && Grounded()) body.AddForce(Vector2.up * settings.jumpImpulse, ForceMode2D.Impulse);
-            if (dashPending && Time.time >= nextDash) { body.AddForce(Vector2.right * facing * settings.dashImpulse, ForceMode2D.Impulse); nextDash = Time.time + settings.dashCooldown; }
             jumpPending = dashPending = false;
         }
+        void OnDisable() { if (authority && body != null) { dashRemaining = 0; body.gravityScale = settings.gravityScale; } }
         void Update()
         {
             if (authority) return;

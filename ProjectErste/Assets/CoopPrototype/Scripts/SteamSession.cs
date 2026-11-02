@@ -8,7 +8,7 @@ namespace ShapeCoop
 {
     public sealed class SteamSession : MonoBehaviour
     {
-        const string Key = "shape_coop_project", Value = "projecterste_prototype_v1";
+        const string Key = "shape_coop_project", Value = "projecterste_prototype_v2";
         public bool Available { get; private set; }
         public string Status { get; private set; } = "Initializing Steam...";
         public CSteamID Lobby { get; private set; }
@@ -27,6 +27,12 @@ namespace ShapeCoop
         Callback<LobbyMatchList_t> list; Callback<LobbyChatUpdate_t> members;
         Callback<P2PSessionRequest_t> request; Callback<P2PSessionConnectFail_t> failure;
         Callback<SteamServersDisconnected_t> disconnected;
+        Callback<GameLobbyJoinRequested_t> invite;
+        Callback<GameOverlayActivated_t> overlay;
+        Callback<LobbyDataUpdate_t> lobbyData;
+        CSteamID pendingInvite; double inviteDeadline;
+        public bool OverlayActive { get; private set; }
+        public bool OverlayReady => Available && SteamUtils.IsOverlayEnabled();
         double nextPing; bool playing; CSteamID gameHost;
         public bool Playing
         {
@@ -40,8 +46,8 @@ namespace ShapeCoop
             settings = GetComponent<PrototypeSettings>();
             try
             {
-                Available = SteamAPI.Init();
-                if (!Available) { Status = "Steam unavailable. Start Steam and sign in, then restart."; return; }
+                Available = SteamEarlyInit.Available;
+                if (!Available) { Status = "Steam unavailable. Start Steam and sign in, then restart. " + SteamEarlyInit.Error; return; }
                 created = Callback<LobbyCreated_t>.Create(OnCreated);
                 entered = Callback<LobbyEnter_t>.Create(OnEntered);
                 list = Callback<LobbyMatchList_t>.Create(OnList);
@@ -49,8 +55,16 @@ namespace ShapeCoop
                 request = Callback<P2PSessionRequest_t>.Create(x => { if (IsMember(x.m_steamIDRemote)) SteamNetworking.AcceptP2PSessionWithUser(x.m_steamIDRemote); });
                 failure = Callback<P2PSessionConnectFail_t>.Create(x => Fail(x.m_steamIDRemote, "P2P connection failed"));
                 disconnected = Callback<SteamServersDisconnected_t>.Create(_ => { Status = "Steam disconnected"; Leave(); });
+                invite = Callback<GameLobbyJoinRequested_t>.Create(x => RequestInviteJoin(x.m_steamIDLobby));
+                overlay = Callback<GameOverlayActivated_t>.Create(x => OverlayActive = x.m_bActive != 0);
+                lobbyData = Callback<LobbyDataUpdate_t>.Create(OnInviteData);
                 SteamNetworking.AllowP2PPacketRelay(true);
                 Status = "Steam connected: " + SteamFriends.GetPersonaName();
+                SteamApps.GetLaunchCommandLine(out string steamArguments, 4096);
+                var commandLine = string.Join(" ", Environment.GetCommandLineArgs()) + " " + steamArguments;
+                var args = commandLine.Split(new[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
+                for (int i = 0; i + 1 < args.Length; i++)
+                    if (args[i] == "+connect_lobby" && ulong.TryParse(args[i + 1], out ulong lobbyId)) { RequestInviteJoin(new CSteamID(lobbyId)); break; }
             }
             catch (Exception e) { Available = false; Status = "Steam initialization failed: " + e.Message; Debug.LogException(e); }
         }
@@ -67,6 +81,27 @@ namespace ShapeCoop
         {
             if (!Available || InLobby || SteamMatchmaking.GetLobbyData(id, Key) != Value) return;
             Status = "Joining..."; SteamMatchmaking.JoinLobby(id);
+        }
+        public void InviteFriends()
+        {
+            if (!InLobby || Playing) return;
+            if (!OverlayReady) { Status = "Steam overlay unavailable. Enable it in Steam and launch through Steam."; return; }
+            SteamFriends.ActivateGameOverlayInviteDialog(Lobby);
+        }
+        void RequestInviteJoin(CSteamID id)
+        {
+            if (!Available || id == CSteamID.Nil || id == Lobby) return;
+            pendingInvite = id; inviteDeadline = Time.realtimeSinceStartupAsDouble + 15;
+            Status = "Checking invited room...";
+            if (!SteamMatchmaking.RequestLobbyData(id)) { pendingInvite = CSteamID.Nil; Status = "Could not retrieve invited room"; }
+        }
+        void OnInviteData(LobbyDataUpdate_t data)
+        {
+            if (pendingInvite == CSteamID.Nil || data.m_ulSteamIDLobby != pendingInvite.m_SteamID || data.m_ulSteamIDMember != pendingInvite.m_SteamID) return;
+            var target = pendingInvite; pendingInvite = CSteamID.Nil;
+            if (data.m_bSuccess == 0 || SteamMatchmaking.GetLobbyData(target, Key) != Value) { Status = "Invite rejected: room is unavailable or belongs to another game/version"; return; }
+            if (InLobby) Leave();
+            Status = "Joining invited room..."; SteamMatchmaking.JoinLobby(target);
         }
         void OnCreated(LobbyCreated_t x)
         {
@@ -130,6 +165,7 @@ namespace ShapeCoop
         {
             if (!Available) return;
             SteamAPI.RunCallbacks();
+            if (pendingInvite != CSteamID.Nil && Time.realtimeSinceStartupAsDouble > inviteDeadline) { pendingInvite = CSteamID.Nil; Status = "Invite lookup timed out"; }
             while (SteamNetworking.IsP2PPacketAvailable(out uint size))
             {
                 if (size > 65536) { var discard = new byte[size]; SteamNetworking.ReadP2PPacket(discard, size, out _, out _); continue; }
@@ -174,6 +210,6 @@ namespace ShapeCoop
             if (Available && InLobby) { foreach (var id in Members()) if (id != Self) SteamNetworking.CloseP2PSessionWithUser(id); SteamMatchmaking.LeaveLobby(Lobby); }
             Lobby = CSteamID.Nil; Connected.Clear(); firstSeen.Clear(); failed.Clear(); published.Clear(); Playing = false; PeerChanged?.Invoke();
         }
-        void OnDestroy() { Leave(); if (Available) SteamAPI.Shutdown(); }
+        void OnDestroy() { Leave(); SteamEarlyInit.Shutdown(); Available = false; }
     }
 }
