@@ -13,6 +13,9 @@ namespace ShapeCoop
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
         static void Initialize()
         {
+#if UNITY_EDITOR
+            if (UnityEditor.SessionState.GetBool("ShapeCoop.MapTestPlay", false)) { Available = false; Error = "Local map test"; return; }
+#endif
             try { Available = SteamAPI.Init(); Error = Available ? null : "Steam is not running or initialization failed"; }
             catch (Exception e) { Available = false; Error = e.Message; Debug.LogWarning("Steam initialization failed: " + e.Message); }
         }

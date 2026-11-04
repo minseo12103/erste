@@ -9,17 +9,24 @@ namespace ShapeCoop
     [RequireComponent(typeof(PrototypeSettings), typeof(SteamSession))]
     public sealed class PrototypeGame : MonoBehaviour
     {
+        [Tooltip("Optional authored sections, placed in order. Leave empty to use the original test map.")]
+        public MapSectionPlacement[] mapSections;
+        [Tooltip("Follow the goal ball while playing authored sections.")]
+        public bool followBallInAuthoredMaps = true;
         SteamSession session; PrototypeSettings settings;
         readonly Dictionary<string, PrototypePlayer> players = new Dictionary<string, PrototypePlayer>();
         GameObject world; Rigidbody2D ball; Vector2 ballTarget; float ballAngle;
         const float BallStartX = -3.8f, BallStartY = 1.1f;
+        Vector2 ballSpawn;
+        bool authoredMap;
+        Vector3 initialCameraPosition;
         readonly PrototypeClock clock = new PrototypeClock();
         double elapsed, nextSnapshot; bool completed; int epoch, snapshotSequence, lastSnapshot;
         int jump, dash, freeze; float inputMove; Vector2 roomScroll;
         double pendingDashAt = -1;
         PhysicsMaterial2D ballMaterial;
         GUIStyle title, label;
-        void Awake() { settings = GetComponent<PrototypeSettings>(); session = GetComponent<SteamSession>(); session.Received += Receive; }
+        void Awake() { settings = GetComponent<PrototypeSettings>(); session = GetComponent<SteamSession>(); session.Received += Receive; if (Camera.main != null) initialCameraPosition = Camera.main.transform.position; }
         void Update()
         {
             if (!session.Playing) { if (world != null) ClearWorld(); return; }
@@ -61,6 +68,11 @@ namespace ShapeCoop
                 if (id != session.Self && (!members.Contains(id) || !session.IsConnected(id))) remove.Add(pair.Key);
             }
             foreach (string id in remove) { Destroy(players[id].gameObject); players.Remove(id); }
+        }
+        void LateUpdate()
+        {
+            if (!session.Playing || !authoredMap || !followBallInAuthoredMaps || ball == null || Camera.main == null) return;
+            var p = ball.transform.position; Camera.main.transform.position = new Vector3(p.x, p.y + 1f, initialCameraPosition.z);
         }
         void ApplyInput(CSteamID from, Packet p)
         {
@@ -107,14 +119,18 @@ namespace ShapeCoop
         void BuildWorld(PlayerData[] data, bool host)
         {
             ClearWorld(); world = new GameObject("Prototype World");
-            PrototypeVisuals.Box(world.transform, "Left ground", new Vector2(-6, -.5f), new Vector2(12, 1), new Color(.32f,.42f,.46f));
-            PrototypeVisuals.Box(world.transform, "Right ground", new Vector2(8, -.5f), new Vector2(10, 1), new Color(.32f,.42f,.46f));
-            PrototypeVisuals.Box(world.transform, "Left boundary", new Vector2(-12.2f, 2), new Vector2(.4f, 5), new Color(.32f,.42f,.46f));
-            PrototypeVisuals.Box(world.transform, "Right boundary", new Vector2(13.2f, 2), new Vector2(.4f, 5), new Color(.32f,.42f,.46f));
-            var goal = new GameObject("Ball goal"); goal.transform.SetParent(world.transform); goal.transform.position = new Vector3(10,1,0);
-            var trigger = goal.AddComponent<BoxCollider2D>(); trigger.isTrigger = true; trigger.size = new Vector2(1.6f,2f);
-            PrototypeVisuals.Shape(goal.transform, 1, new Color(.25f,.9f,.38f,.3f), trigger.size, 0);
-            var goalScript = goal.AddComponent<PrototypeGoal>(); goalScript.game = this;
+            Vector2 playerStart = new Vector2(-9.7f, .65f);
+            ballSpawn = new Vector2(BallStartX, BallStartY);
+            bool haveSections = MapSectionAssembler.Build(mapSections, world.transform, BallReachedGoal, out Vector2? playerMarker, out Vector2? ballMarker);
+            if (playerMarker.HasValue) playerStart = playerMarker.Value;
+            if (ballMarker.HasValue) ballSpawn = ballMarker.Value;
+            authoredMap = haveSections;
+            if (!haveSections) BuildDefaultTerrain();
+            else
+            {
+                if (!playerMarker.HasValue) Debug.LogWarning("Authored map has no Player Start marker; using the prototype default.");
+                if (!ballMarker.HasValue) Debug.LogWarning("Authored map has no Ball Start marker; using the prototype default.");
+            }
             var ballGo = new GameObject("Goal ball"); ballGo.transform.SetParent(world.transform);
             ball = ballGo.AddComponent<Rigidbody2D>(); ball.mass = settings.ballMass; ball.gravityScale = settings.gravityScale; ball.interpolation = RigidbodyInterpolation2D.Interpolate; ball.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             var ballCollider = ballGo.AddComponent<CircleCollider2D>(); ballCollider.radius = .6f;
@@ -126,19 +142,30 @@ namespace ShapeCoop
             for (int i = 0; i < data.Length; i++)
             {
                 var obj = new GameObject("Player " + data[i].name); obj.transform.SetParent(world.transform);
-                var player = obj.AddComponent<PrototypePlayer>(); player.Initialize(settings, data[i], new Vector2(-9.7f + i * 1.25f, .65f), host);
+                var player = obj.AddComponent<PrototypePlayer>(); player.Initialize(settings, data[i], playerStart + new Vector2(i * 1.25f, 0), host);
                 players.Add(data[i].id, player);
             }
             ResetPositions();
         }
-        void ClearWorld() { if (world != null) Destroy(world); if (ballMaterial != null) Destroy(ballMaterial); ballMaterial = null; world = null; players.Clear(); ball = null; pendingDashAt = -1; }
+        void BuildDefaultTerrain()
+        {
+            PrototypeVisuals.Box(world.transform, "Left ground", new Vector2(-6, -.5f), new Vector2(12, 1), new Color(.32f,.42f,.46f));
+            PrototypeVisuals.Box(world.transform, "Right ground", new Vector2(8, -.5f), new Vector2(10, 1), new Color(.32f,.42f,.46f));
+            PrototypeVisuals.Box(world.transform, "Left boundary", new Vector2(-12.2f, 2), new Vector2(.4f, 5), new Color(.32f,.42f,.46f));
+            PrototypeVisuals.Box(world.transform, "Right boundary", new Vector2(13.2f, 2), new Vector2(.4f, 5), new Color(.32f,.42f,.46f));
+            var goal = new GameObject("Ball goal"); goal.transform.SetParent(world.transform); goal.transform.position = new Vector3(10,1,0);
+            var trigger = goal.AddComponent<BoxCollider2D>(); trigger.isTrigger = true; trigger.size = new Vector2(1.6f,2f);
+            PrototypeVisuals.Shape(goal.transform, 1, new Color(.25f,.9f,.38f,.3f), trigger.size, 0);
+            var goalScript = goal.AddComponent<PrototypeGoal>(); goalScript.game = this;
+        }
+        void ClearWorld() { if (world != null) Destroy(world); if (ballMaterial != null) Destroy(ballMaterial); if (authoredMap && Camera.main != null) Camera.main.transform.position = initialCameraPosition; authoredMap = false; ballMaterial = null; world = null; players.Clear(); ball = null; pendingDashAt = -1; }
         public static PhysicsMaterial2D CreateBallMaterial(PrototypeSettings s) => new PhysicsMaterial2D("Goal ball bounce") { bounciness = Mathf.Clamp01(s.ballBounciness), friction = .2f };
         void ResetPositions()
         {
             foreach (var player in players.Values) player.ResetBody();
-            if (session.IsHost) { ball.position = new Vector2(BallStartX, BallStartY); ball.rotation = 0; ball.linearVelocity = Vector2.zero; ball.angularVelocity = 0; }
-            else { ball.transform.position = new Vector2(BallStartX, BallStartY); ball.transform.rotation = Quaternion.identity; }
-            ballTarget = new Vector2(BallStartX, BallStartY); ballAngle = 0;
+            if (session.IsHost) { ball.position = ballSpawn; ball.rotation = 0; ball.linearVelocity = Vector2.zero; ball.angularVelocity = 0; }
+            else { ball.transform.position = ballSpawn; ball.transform.rotation = Quaternion.identity; }
+            ballTarget = ballSpawn; ballAngle = 0;
         }
         void Restart()
         {
