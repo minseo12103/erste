@@ -16,6 +16,7 @@ namespace ShapeCoop
         SteamSession session; PrototypeSettings settings;
         readonly Dictionary<string, PrototypePlayer> players = new Dictionary<string, PrototypePlayer>();
         GameObject world; Rigidbody2D ball; Vector2 ballTarget; float ballAngle;
+        MapGimmick[] gimmicks = Array.Empty<MapGimmick>();
         const float BallStartX = -3.8f, BallStartY = 1.1f;
         Vector2 ballSpawn;
         bool authoredMap;
@@ -23,6 +24,7 @@ namespace ShapeCoop
         readonly PrototypeClock clock = new PrototypeClock();
         double elapsed, nextSnapshot; bool completed; int epoch, snapshotSequence, lastSnapshot;
         int jump, dash, freeze; float inputMove; Vector2 roomScroll;
+        readonly EmoteInputReader emoteInput = new EmoteInputReader();
         double pendingDashAt = -1;
         PhysicsMaterial2D ballMaterial;
         GUIStyle title, label;
@@ -55,7 +57,8 @@ namespace ShapeCoop
             if (overlay || keyboard.tabKey.isPressed) pendingDashAt = -1;
             if (pendingDashAt >= 0 && Time.realtimeSinceStartupAsDouble >= pendingDashAt) { dash++; pendingDashAt = -1; }
             if (!overlay && keyboard.fKey.wasPressedThisFrame) freeze++;
-            var input = new Packet { kind = "input", epoch = epoch, move = inputMove, jump = jump, jumpHeld = !overlay && keyboard.spaceKey.isPressed, dash = dash, freeze = freeze };
+            if (players.TryGetValue(session.Self.m_SteamID.ToString(), out var localPlayer)) emoteInput.Read(keyboard, Camera.main, localPlayer.transform.position, !overlay);
+            var input = new Packet { kind = "input", epoch = epoch, move = inputMove, jump = jump, jumpHeld = !overlay && keyboard.spaceKey.isPressed, dash = dash, freeze = freeze, emoteSequence = emoteInput.sequence, emoteRequested = emoteInput.requested, emoteHeld = emoteInput.held, emoteX = emoteInput.direction.x, emoteY = emoteInput.direction.y };
             if (session.IsHost) ApplyInput(session.Self, input); else session.Send(session.Host, input);
         }
         void RemoveDisconnected()
@@ -79,6 +82,7 @@ namespace ShapeCoop
             if (!session.IsHost || p.epoch != epoch || !players.TryGetValue(from.m_SteamID.ToString(), out var player)) return;
             player.move = Mathf.Clamp(p.move, -1, 1);
             player.jumpHeld = p.jumpHeld;
+            player.SetEmoteInput(p.emoteSequence, p.emoteRequested, p.emoteHeld, new Vector2(p.emoteX, p.emoteY));
             if (p.jump > player.lastJump) { player.lastJump = p.jump; player.jumpPending = true; }
             if (p.dash > player.lastDash) { player.lastDash = p.dash; player.dashPending = true; }
             if (p.freeze > player.lastFreeze) { player.lastFreeze = p.freeze; player.freezePending = true; }
@@ -94,12 +98,12 @@ namespace ShapeCoop
             if (from != session.Host) return;
             if (p.kind == "start" && !session.Playing)
             {
-                session.Playing = true; epoch = p.epoch; BuildWorld(p.players, false); ApplyState(p, true); return;
+                session.Playing = true; epoch = p.epoch; emoteInput.Reset(); BuildWorld(p.players, false); ApplyState(p, true); return;
             }
             if (!session.Playing || (p.kind != "state" && p.kind != "reset" && p.kind != "complete")) return;
             if (p.epoch < epoch || (p.epoch == epoch && p.sequence <= lastSnapshot)) return;
             bool snap = p.epoch != epoch || p.kind == "reset";
-            if (p.epoch != epoch) { epoch = p.epoch; jump = dash = freeze = 0; inputMove = 0; pendingDashAt = -1; }
+            if (p.epoch != epoch) { epoch = p.epoch; jump = dash = freeze = 0; inputMove = 0; pendingDashAt = -1; emoteInput.Reset(); }
             ApplyState(p, snap);
         }
         void StartGame()
@@ -112,7 +116,7 @@ namespace ShapeCoop
             var data = new PlayerData[members.Count];
             for (int i = 0; i < members.Count; i++) data[i] = new PlayerData { id = members[i].m_SteamID.ToString(), name = SteamFriends.GetFriendPersonaName(members[i]), shape = shapes[i], color = i };
             SteamMatchmaking.SetLobbyJoinable(session.Lobby, false);
-            session.Playing = true; epoch++; snapshotSequence = lastSnapshot = 0; jump = dash = freeze = 0;
+            session.Playing = true; epoch++; snapshotSequence = lastSnapshot = 0; jump = dash = freeze = 0; emoteInput.Reset();
             BuildWorld(data, true); completed = false; elapsed = 0; clock.Begin(Time.realtimeSinceStartupAsDouble);
             session.Broadcast(Snapshot("start"));
         }
@@ -122,6 +126,8 @@ namespace ShapeCoop
             Vector2 playerStart = new Vector2(-9.7f, .65f);
             ballSpawn = new Vector2(BallStartX, BallStartY);
             bool haveSections = MapSectionAssembler.Build(mapSections, world.transform, BallReachedGoal, out Vector2? playerMarker, out Vector2? ballMarker);
+            gimmicks = world.GetComponentsInChildren<MapGimmick>(true);
+            foreach (var gimmick in gimmicks) gimmick.Initialize(host);
             if (playerMarker.HasValue) playerStart = playerMarker.Value;
             if (ballMarker.HasValue) ballSpawn = ballMarker.Value;
             authoredMap = haveSections;
@@ -136,14 +142,19 @@ namespace ShapeCoop
             var ballCollider = ballGo.AddComponent<CircleCollider2D>(); ballCollider.radius = .6f;
             ballMaterial = CreateBallMaterial(settings);
             ballCollider.sharedMaterial = ballMaterial;
+            ballGo.AddComponent<MapGoalBall>().SetNormalMaterial(ballMaterial);
             PrototypeVisuals.Shape(ballGo.transform, 2, new Color(1f,.8f,.08f), new Vector2(1.2f,1.2f), 1);
             var center = PrototypeVisuals.Shape(ballGo.transform, 2, new Color(.35f,.22f,.05f), new Vector2(.25f,.25f), 2);
             if (!host) ball.simulated = false;
+            float spawnOffset = 0, previousSize = 0;
             for (int i = 0; i < data.Length; i++)
             {
+                float size = CharacterLayout.Resolve(data[i]).size;
+                if (i > 0) spawnOffset += (previousSize + size) * .5f + .25f;
                 var obj = new GameObject("Player " + data[i].name); obj.transform.SetParent(world.transform);
-                var player = obj.AddComponent<PrototypePlayer>(); player.Initialize(settings, data[i], playerStart + new Vector2(i * 1.25f, 0), host);
+                var player = obj.AddComponent<PrototypePlayer>(); player.Initialize(settings, data[i], playerStart + new Vector2(spawnOffset, (size - 1f) * .5f), host);
                 players.Add(data[i].id, player);
+                previousSize = size;
             }
             ResetPositions();
         }
@@ -158,11 +169,13 @@ namespace ShapeCoop
             PrototypeVisuals.Shape(goal.transform, 1, new Color(.25f,.9f,.38f,.3f), trigger.size, 0);
             var goalScript = goal.AddComponent<PrototypeGoal>(); goalScript.game = this;
         }
-        void ClearWorld() { if (world != null) Destroy(world); if (ballMaterial != null) Destroy(ballMaterial); if (authoredMap && Camera.main != null) Camera.main.transform.position = initialCameraPosition; authoredMap = false; ballMaterial = null; world = null; players.Clear(); ball = null; pendingDashAt = -1; }
+        void ClearWorld() { if (world != null) Destroy(world); if (ballMaterial != null) Destroy(ballMaterial); if (authoredMap && Camera.main != null) Camera.main.transform.position = initialCameraPosition; authoredMap = false; ballMaterial = null; world = null; players.Clear(); ball = null; gimmicks = Array.Empty<MapGimmick>(); pendingDashAt = -1; }
         public static PhysicsMaterial2D CreateBallMaterial(PrototypeSettings s) => new PhysicsMaterial2D("Goal ball bounce") { bounciness = Mathf.Clamp01(s.ballBounciness), friction = .2f };
         void ResetPositions()
         {
             foreach (var player in players.Values) player.ResetBody();
+            foreach (var gimmick in gimmicks) gimmick.ResetGimmick();
+            if (ball != null) ball.GetComponent<MapGoalBall>()?.ResetEffects();
             if (session.IsHost) { ball.position = ballSpawn; ball.rotation = 0; ball.linearVelocity = Vector2.zero; ball.angularVelocity = 0; }
             else { ball.transform.position = ballSpawn; ball.transform.rotation = Quaternion.identity; }
             ballTarget = ballSpawn; ballAngle = 0;
@@ -170,7 +183,7 @@ namespace ShapeCoop
         void Restart()
         {
             if (!session.IsHost || !session.Playing) return;
-            epoch++; snapshotSequence = 0; jump = dash = freeze = 0; inputMove = 0; pendingDashAt = -1; ResetPositions();
+            epoch++; snapshotSequence = 0; jump = dash = freeze = 0; inputMove = 0; pendingDashAt = -1; emoteInput.Reset(); ResetPositions();
             session.Broadcast(Snapshot("reset"));
         }
         public void BallReachedGoal(Collider2D other)
@@ -182,8 +195,9 @@ namespace ShapeCoop
         Packet Snapshot(string kind)
         {
             var data = new PlayerData[players.Count]; int i = 0;
-            foreach (var p in players.Values) data[i++] = new PlayerData { id = p.playerId, name = p.playerName, shape = p.shape, color = p.colorIndex, body = p.Capture() };
-            return new Packet { kind = kind, epoch = epoch, sequence = ++snapshotSequence, elapsed = elapsed, completed = completed, players = data, ball = new BodyData { x = ball.position.x, y = ball.position.y, angle = ball.rotation } };
+            foreach (var p in players.Values) data[i++] = p.CapturePlayerData();
+            var states = new GimmickData[gimmicks.Length]; for (int j = 0; j < gimmicks.Length; j++) states[j] = gimmicks[j].Capture(j);
+            return new Packet { kind = kind, epoch = epoch, sequence = ++snapshotSequence, elapsed = elapsed, completed = completed, players = data, ball = new BodyData { x = ball.position.x, y = ball.position.y, angle = ball.rotation }, gimmicks = states };
         }
         void ApplyState(Packet p, bool snap)
         {
@@ -193,17 +207,19 @@ namespace ShapeCoop
             var remove = new List<string>(); foreach (var id in players.Keys) if (!present.Contains(id)) remove.Add(id);
             foreach (var id in remove) { Destroy(players[id].gameObject); players.Remove(id); }
             if (p.ball != null) { ballTarget = new Vector2(p.ball.x, p.ball.y); ballAngle = p.ball.angle; if (snap) { ball.transform.position = ballTarget; ball.transform.rotation = Quaternion.Euler(0,0,ballAngle); } }
+            if (p.gimmicks != null) foreach (var state in p.gimmicks) if (state != null && state.index >= 0 && state.index < gimmicks.Length) gimmicks[state.index].Apply(state, snap);
         }
         string Clock(double seconds) { var t = TimeSpan.FromSeconds(Math.Max(0, seconds)); return string.Format("{0:00}:{1:00}.{2:00}", (int)t.TotalMinutes, t.Seconds, t.Milliseconds / 10); }
         void OnGUI()
         {
             if (title == null) { title = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold }; label = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true }; }
-            GUI.Box(new Rect(10, 10, 420, session.Playing ? 165 : Mathf.Min(Screen.height - 20, 600)), "");
+            GUI.Box(new Rect(10, 10, 420, session.Playing ? 185 : Mathf.Min(Screen.height - 20, 600)), "");
             GUILayout.BeginArea(new Rect(22, 18, 396, Screen.height - 36));
             if (session.Playing)
             {
                 GUILayout.Label(completed ? "COMPLETE  " + Clock(elapsed) : "TIME  " + Clock(elapsed), title);
                 GUILayout.Label("A / D move   SPACE jump   SHIFT dash   F freeze", label);
+                GUILayout.Label("1 / 2 / 3 emotes   Mouse: aim", label);
                 if (GUILayout.Button("Restart from start", GUILayout.Height(32))) { if (session.IsHost) Restart(); else session.Send(session.Host, new Packet { kind = "restart" }); }
                 if (GUILayout.Button("Leave room", GUILayout.Height(27))) session.Leave();
             }
@@ -246,8 +262,11 @@ namespace ShapeCoop
             {
                 foreach (var p in players.Values)
                 {
-                    Vector3 screen = Camera.main.WorldToScreenPoint(p.transform.position + Vector3.up * .85f);
-                    GUI.Label(new Rect(screen.x - 65, Screen.height - screen.y - 15, 150, 23), p.playerName + (p.frozen ? " [F]" : ""));
+                    var layout = p.CurrentCharacterLayout;
+                    Vector3 screen = Camera.main.WorldToScreenPoint(p.transform.position + Vector3.up * (Mathf.Max(.5f, .735f + .34f * layout.helmetSize + layout.helmetOffset.y) * layout.size + .225f));
+                    var previousColor = GUI.color; GUI.color = PrototypeVisuals.PlayerColor(p.colorIndex);
+                    GUI.Label(new Rect(screen.x - 65, Screen.height - screen.y - 15, 150, 23), p.playerName + (p.forcedFrozen ? " [ICE]" : p.frozen ? " [F]" : p.stunned ? " [STUN]" : ""));
+                    GUI.color = previousColor;
                 }
             }
         }

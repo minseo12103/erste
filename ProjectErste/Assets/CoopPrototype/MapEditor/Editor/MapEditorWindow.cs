@@ -11,18 +11,16 @@ namespace ShapeCoop.Editor
     [InitializeOnLoad]
     public sealed class MapEditorWindow : EditorWindow
     {
-        const string SectionsPath = "Assets/CoopMaps/Sections";
+        const string SectionsPath = MapSectionBrowser.SectionsPath;
         public sealed class PaletteItem
         {
             public GameObject prefab;
             public string path, label, category;
         }
-        readonly List<PaletteItem> palette = new List<PaletteItem>();
-        readonly List<string> categories = new List<string>();
-        string sectionName = "Section", search = "";
-        int category;
-        Vector2 scroll, dragStart;
-        GameObject dragged;
+        readonly List<MapSectionBrowser.Entry> sections = new List<MapSectionBrowser.Entry>();
+        string sectionName = "Section", sectionSearch = "";
+        Vector2 sectionScroll, mainScroll;
+        bool showSections = true;
         GameObject paintPrefab, previewPrefab;
         Vector3 previewPosition;
         enum SceneTool { None, Paint, PlayerStart, BallStart }
@@ -30,6 +28,15 @@ namespace ShapeCoop.Editor
         float placementRotation;
         bool snap;
         float grid;
+        static MapEditorWindow snapSettingsOwner;
+        bool ownsMoveSnap;
+        bool previousGridSnap, previousSnap;
+        Vector3 previousGridSize, previousMoveSnap;
+        PivotRotation previousPivotRotation;
+        Transform[] rectDragTargets;
+        Transform rectDragAnchor;
+        bool rectDragging, rectResizing, rectSnapPending, applyingRectSnap;
+        int rectUndoGroup;
 
         static MapEditorWindow()
         {
@@ -43,13 +50,18 @@ namespace ShapeCoop.Editor
                     SessionState.SetBool("ShapeCoop.MapTestPlay", mapTest);
                     var windows = Resources.FindObjectsOfTypeAll<MapEditorWindow>();
                     SessionState.SetBool("ShapeCoop.MapEditorReopen", mapTest && windows.Length > 0);
+                    var palettes = Resources.FindObjectsOfTypeAll<MapPaletteWindow>();
+                    SessionState.SetBool("ShapeCoop.MapPaletteReopen", mapTest && palettes.Length > 0);
                     if (mapTest) foreach (var window in windows) window.Close();
+                    if (mapTest) foreach (var palette in palettes) palette.Close();
                 }
                 else if (state == PlayModeStateChange.EnteredEditMode && SessionState.GetBool("ShapeCoop.MapEditorReopen", false))
                 {
                     SessionState.SetBool("ShapeCoop.MapEditorReopen", false);
                     EditorApplication.delayCall += Open;
                 }
+                if (state == PlayModeStateChange.EnteredEditMode && SessionState.GetBool("ShapeCoop.MapPaletteReopen", false))
+                { SessionState.SetBool("ShapeCoop.MapPaletteReopen", false); EditorApplication.delayCall += MapPaletteWindow.Open; }
             };
         }
         [MenuItem("Tools/Shape Coop/Map Editor/Open")]
@@ -62,14 +74,120 @@ namespace ShapeCoop.Editor
         }
         void OnEnable()
         {
-            minSize = new Vector2(340, 760);
+            minSize = new Vector2(340, 500);
             snap = EditorPrefs.GetBool("ShapeCoop.MapSnap", true); grid = Mathf.Max(.05f, EditorPrefs.GetFloat("ShapeCoop.MapGrid", .5f));
             SceneView.duringSceneGui += HandleSceneDrag;
             EditorApplication.projectChanged += OnProjectChanged;
-            ReloadPalette(false);
+            EditorApplication.update += SyncMoveSnapping;
+            AssemblyReloadEvents.beforeAssemblyReload += RestoreMoveSnapping;
+            Undo.postprocessModifications += PostprocessRectMove;
+            ReloadSections();
         }
-        void OnDisable() { SceneView.duringSceneGui -= HandleSceneDrag; EditorApplication.projectChanged -= OnProjectChanged; }
-        void OnProjectChanged() { ReloadPalette(false); Repaint(); }
+        void OnDisable() { SceneView.duringSceneGui -= HandleSceneDrag; EditorApplication.projectChanged -= OnProjectChanged; EditorApplication.update -= SyncMoveSnapping; AssemblyReloadEvents.beforeAssemblyReload -= RestoreMoveSnapping; Undo.postprocessModifications -= PostprocessRectMove; CancelRectDrag(); RestoreMoveSnapping(); }
+        void SyncMoveSnapping()
+        {
+            var section = CurrentSection();
+            var selection = Selection.transforms;
+            bool moveTool = Tools.current == Tool.Move || Tools.current == Tool.Rect;
+            bool eligible = !EditorApplication.isPlayingOrWillChangePlaymode && section != null && sceneTool == SceneTool.None && moveTool && selection.Length > 0;
+            if (eligible)
+                foreach (var item in selection) if (item == null || item == section.transform || !item.IsChildOf(section.transform)) { eligible = false; break; }
+            if (!eligible) { CancelRectDrag(); RestoreMoveSnapping(); return; }
+            if (snapSettingsOwner != null && snapSettingsOwner != this) return;
+            if (!ownsMoveSnap)
+            {
+                snapSettingsOwner = this; ownsMoveSnap = true;
+                previousGridSnap = EditorSnapSettings.gridSnapEnabled; previousSnap = EditorSnapSettings.snapEnabled;
+                previousGridSize = EditorSnapSettings.gridSize; previousMoveSnap = EditorSnapSettings.move; previousPivotRotation = Tools.pivotRotation;
+            }
+            if (snap && Tools.current == Tool.Move)
+            {
+                float size = Mathf.Max(.05f, grid);
+                EditorSnapSettings.gridSize = new Vector3(size, size, previousGridSize.z);
+                EditorSnapSettings.move = new Vector3(size, size, previousMoveSnap.z);
+                Tools.pivotRotation = PivotRotation.Global;
+                EditorSnapSettings.gridSnapEnabled = true; EditorSnapSettings.snapEnabled = true;
+            }
+            else
+            {
+                if (!snap) CancelRectDrag();
+                EditorSnapSettings.gridSnapEnabled = false; EditorSnapSettings.snapEnabled = false;
+                EditorSnapSettings.gridSize = previousGridSize; EditorSnapSettings.move = previousMoveSnap; Tools.pivotRotation = previousPivotRotation;
+            }
+        }
+        void BeginRectDrag(MapSection section)
+        {
+            CancelRectDrag();
+            if (!snap || Tools.current != Tool.Rect || sceneTool != SceneTool.None || section == null) return;
+            SyncMoveSnapping(); if (!ownsMoveSnap) return;
+            rectDragTargets = Selection.GetTransforms(SelectionMode.TopLevel | SelectionMode.Editable);
+            if (rectDragTargets.Length == 0) return;
+            foreach (var item in rectDragTargets) if (item == null || item == section.transform || !item.IsChildOf(section.transform)) { rectDragTargets = null; return; }
+            var active = Selection.activeTransform;
+            rectDragAnchor = rectDragTargets[0];
+            foreach (var item in rectDragTargets) if (active != null && (active == item || active.IsChildOf(item))) { rectDragAnchor = item; break; }
+            rectDragging = true;
+        }
+        UndoPropertyModification[] PostprocessRectMove(UndoPropertyModification[] modifications)
+        {
+            if (!rectDragging || rectResizing || !snap || !ownsMoveSnap || Tools.current != Tool.Rect || applyingRectSnap || Undo.isProcessing || rectDragTargets == null) return modifications;
+            bool moved = false, resized = false;
+            foreach (var modification in modifications)
+            {
+                if (modification.currentValue == null) continue;
+                var transform = modification.currentValue.target as Transform;
+                if (transform == null || Array.IndexOf(rectDragTargets, transform) < 0) continue;
+                string path = modification.currentValue.propertyPath;
+                if (path.StartsWith("m_LocalScale.", StringComparison.Ordinal) || path.StartsWith("m_LocalRotation.", StringComparison.Ordinal) || path.StartsWith("m_LocalEulerAnglesHint.", StringComparison.Ordinal)) resized = true;
+                else if (path.StartsWith("m_LocalPosition.", StringComparison.Ordinal)) moved = true;
+            }
+            if (resized) { rectResizing = true; if (rectSnapPending) { EditorApplication.delayCall -= ApplyPendingRectSnap; rectSnapPending = false; } }
+            else if (moved)
+            {
+                rectUndoGroup = Undo.GetCurrentGroup();
+                if (!rectSnapPending) { rectSnapPending = true; EditorApplication.delayCall += ApplyPendingRectSnap; }
+            }
+            return modifications;
+        }
+        void ApplyPendingRectSnap()
+        {
+            rectSnapPending = false;
+            var active = Selection.activeTransform;
+            if (this == null || !snap || !ownsMoveSnap || rectResizing || rectDragAnchor == null || rectDragTargets == null || Tools.current != Tool.Rect || Undo.isProcessing || Undo.GetCurrentGroup() != rectUndoGroup || active == null || (active != rectDragAnchor && !active.IsChildOf(rectDragAnchor))) return;
+            foreach (var item in rectDragTargets) if (item == null) return;
+            Vector3 p = rectDragAnchor.position; float size = Mathf.Max(.05f, grid);
+            Vector3 adjustment = new Vector3(Mathf.Round(p.x / size) * size - p.x, Mathf.Round(p.y / size) * size - p.y, 0);
+            if (adjustment.sqrMagnitude < 1e-10f) return;
+            applyingRectSnap = true;
+            try
+            {
+                Undo.RecordObjects(rectDragTargets, "Move map objects");
+                foreach (var item in rectDragTargets) { item.position += adjustment; if (PrefabUtility.IsPartOfPrefabInstance(item)) PrefabUtility.RecordPrefabInstancePropertyModifications(item); }
+                Undo.FlushUndoRecordObjects(); Undo.CollapseUndoOperations(rectUndoGroup);
+            }
+            finally { applyingRectSnap = false; if (!rectDragging) { rectDragTargets = null; rectDragAnchor = null; } }
+        }
+        void EndRectDrag() { rectDragging = false; rectResizing = false; if (!rectSnapPending) { rectDragTargets = null; rectDragAnchor = null; } }
+        void CancelRectDrag()
+        {
+            EditorApplication.delayCall -= ApplyPendingRectSnap; EditorApplication.delayCall -= EndRectDrag;
+            rectSnapPending = rectDragging = rectResizing = false; rectDragTargets = null; rectDragAnchor = null;
+        }
+        void RestoreMoveSnapping()
+        {
+            if (!ownsMoveSnap) return;
+            EditorSnapSettings.gridSnapEnabled = previousGridSnap; EditorSnapSettings.snapEnabled = previousSnap;
+            EditorSnapSettings.gridSize = previousGridSize; EditorSnapSettings.move = previousMoveSnap; Tools.pivotRotation = previousPivotRotation;
+            ownsMoveSnap = false; if (snapSettingsOwner == this) snapSettingsOwner = null;
+        }
+        void OnProjectChanged() { ReloadSections(); Repaint(); }
+        void ReloadSections() { sections.Clear(); sections.AddRange(MapSectionBrowser.FindSections()); }
+        public static void SetPaletteSelection(GameObject prefab)
+        {
+            var windows = Resources.FindObjectsOfTypeAll<MapEditorWindow>();
+            if (windows.Length == 0) { Open(); windows = Resources.FindObjectsOfTypeAll<MapEditorWindow>(); }
+            foreach (var window in windows) { window.paintPrefab = prefab; window.Repaint(); }
+        }
         public static List<PaletteItem> FindPaletteItems()
         {
             var items = new List<PaletteItem>();
@@ -84,6 +202,7 @@ namespace ShapeCoop.Editor
                 int slash = relative.IndexOf('/');
                 string group = slash >= 0 ? relative.Substring(0, slash) : "기타";
                 string label = relative.Substring(0, relative.Length - ".prefab".Length);
+                if (group == "기본 오브젝트") label = label.Substring(slash + 1);
                 if (slash < 0)
                 {
                     switch (label)
@@ -104,16 +223,6 @@ namespace ShapeCoop.Editor
             items.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.path, b.path));
             return items;
         }
-        void ReloadPalette(bool refreshAssets)
-        {
-            string previousCategory = category >= 0 && category < categories.Count ? categories[category] : "전체";
-            if (refreshAssets) AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            palette.Clear(); palette.AddRange(FindPaletteItems());
-            categories.Clear(); categories.Add("전체");
-            foreach (var item in palette) if (!categories.Contains(item.category)) categories.Add(item.category);
-            categories.Sort(1, categories.Count - 1, StringComparer.CurrentCultureIgnoreCase);
-            category = Mathf.Max(0, categories.IndexOf(previousCategory));
-        }
         static MapSection CurrentSection()
         {
             var scene = SceneManager.GetActiveScene();
@@ -129,19 +238,27 @@ namespace ShapeCoop.Editor
         }
         void OnGUI()
         {
+            using (var view = new EditorGUILayout.ScrollViewScope(mainScroll))
+            { mainScroll = view.scrollPosition; DrawContents(); }
+        }
+        void DrawContents()
+        {
             EditorGUILayout.LabelField("맵 구간 에디터", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox("각 구간은 별도 폴더의 작업 씬과 프리팹으로 저장됩니다. 목록의 항목을 Scene 화면으로 끌어다 놓으세요.", MessageType.Info);
             if (GUILayout.Button("맵 구간 조합 화면 열기")) MapAssemblyWindow.Open();
+            if (GUILayout.Button("큰 팔레트 창 열기")) MapPaletteWindow.Open();
+            if (GUILayout.Button("캐릭터 크기 비교")) CharacterComparisonWindow.Open();
             if (!AssetDatabase.IsValidFolder(MapEditorInstaller.PalettePath))
             {
                 EditorGUILayout.HelpBox("팔레트 리소스가 없습니다.", MessageType.Warning);
-                if (GUILayout.Button("팔레트 리소스 설치")) { MapEditorInstaller.EnsureAssets(); ReloadPalette(false); }
+                if (GUILayout.Button("팔레트 리소스 설치")) MapEditorInstaller.EnsureAssets();
                 return;
             }
             using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
             {
                 sectionName = EditorGUILayout.TextField("새 구간 이름", sectionName);
                 if (GUILayout.Button("새 구간 만들기", GUILayout.Height(26))) CreateSection(sectionName, true);
+                DrawSectionList();
                 var section = CurrentSection(); var test = CurrentTest();
                 if (section == null || test == null)
                 {
@@ -180,16 +297,10 @@ namespace ShapeCoop.Editor
                     else if (EditorSceneManager.SaveScene(section.gameObject.scene)) EditorApplication.EnterPlaymode();
                 }
                 EditorGUILayout.Space(); EditorGUILayout.LabelField("배치 팔레트", EditorStyles.boldLabel);
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    if (GUILayout.Button("프리팹 목록 새로고침")) ReloadPalette(true);
-                    if (GUILayout.Button("배치용 폴더 보기")) EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(MapEditorInstaller.PalettePath));
-                }
-                category = EditorGUILayout.Popup("분류", category, categories.ToArray());
-                search = EditorGUILayout.TextField("검색", search);
                 EditorGUI.BeginChangeCheck(); snap = EditorGUILayout.Toggle("격자 맞춤", snap);
                 if (snap) grid = Mathf.Max(.05f, EditorGUILayout.FloatField("격자 간격", grid));
-                if (EditorGUI.EndChangeCheck()) { EditorPrefs.SetBool("ShapeCoop.MapSnap", snap); EditorPrefs.SetFloat("ShapeCoop.MapGrid", grid); }
+                if (EditorGUI.EndChangeCheck()) { EditorPrefs.SetBool("ShapeCoop.MapSnap", snap); EditorPrefs.SetFloat("ShapeCoop.MapGrid", grid); SyncMoveSnapping(); }
+                EditorGUILayout.LabelField("선택한 오브젝트도 이동 도구(W) 또는 사각형 도구(T)에서 격자에 맞춰 이동합니다.", EditorStyles.wordWrappedMiniLabel);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool painting = GUILayout.Toggle(sceneTool == SceneTool.Paint, "연속 배치", "Button");
@@ -197,41 +308,40 @@ namespace ShapeCoop.Editor
                     else if (!painting && sceneTool == SceneTool.Paint) { sceneTool = SceneTool.None; previewPrefab = null; SceneView.RepaintAll(); }
                     placementRotation = EditorGUILayout.FloatField("회전 °", placementRotation);
                 }
-                if (sceneTool != SceneTool.None) EditorGUILayout.HelpBox(sceneTool == SceneTool.Paint ? "목록에서 프리팹을 선택하고 Scene을 클릭하여 반복 배치하세요. [ / ]로 15도 회전, Esc로 종료합니다." : "Scene을 클릭해 테스트 시작점을 지정하세요. Esc로 취소합니다.", MessageType.Info);
-                scroll = EditorGUILayout.BeginScrollView(scroll);
-                foreach (var item in palette)
-                {
-                    if (category != 0 && categories[category] != item.category) continue;
-                    if (!string.IsNullOrWhiteSpace(search) && item.label.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0 && item.path.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    var asset = item.prefab;
-                    if (asset == null) continue;
-                    var rect = GUILayoutUtility.GetRect(100, 48, GUILayout.ExpandWidth(true));
-                    GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
-                    var icon = AssetPreview.GetAssetPreview(asset) ?? AssetPreview.GetMiniThumbnail(asset);
-                    if (icon != null) GUI.DrawTexture(new Rect(rect.x + 5, rect.y + 4, 40, 40), icon, ScaleMode.ScaleToFit, true);
-                    if (AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID())) Repaint();
-                    GUI.Label(new Rect(rect.x + 50, rect.y + 3, rect.width - 55, 22), new GUIContent(item.label, item.path));
-                    var renderer = asset.GetComponentInChildren<Renderer>(true);
-                    string dimensions = renderer == null ? "" : "  크기 " + renderer.bounds.size.x.ToString("0.##") + " × " + renderer.bounds.size.y.ToString("0.##");
-                    GUI.Label(new Rect(rect.x + 50, rect.y + 23, rect.width - 55, 20), (paintPrefab == asset && sceneTool == SceneTool.Paint ? "선택됨" : "끌어서 배치") + dimensions, EditorStyles.miniLabel);
-                    var e = Event.current;
-                    int control = GUIUtility.GetControlID(FocusType.Passive, rect);
-                    var type = e.GetTypeForControl(control);
-                    if (type == EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition))
-                    { GUIUtility.hotControl = control; dragged = asset; dragStart = e.mousePosition; e.Use(); }
-                    else if (type == EventType.MouseDrag && GUIUtility.hotControl == control && dragged == asset && Vector2.Distance(e.mousePosition, dragStart) > 3)
-                    { GUIUtility.hotControl = 0; DragAndDrop.PrepareStartDrag(); DragAndDrop.objectReferences = new UnityEngine.Object[] { asset }; DragAndDrop.StartDrag(item.label); dragged = null; e.Use(); }
-                    else if (type == EventType.MouseUp && GUIUtility.hotControl == control)
-                    { GUIUtility.hotControl = 0; dragged = null; if (rect.Contains(e.mousePosition)) { if (sceneTool == SceneTool.Paint) { paintPrefab = asset; SceneView.RepaintAll(); } else EditorGUIUtility.PingObject(asset); } e.Use(); }
-                }
-                EditorGUILayout.EndScrollView();
-                EditorGUILayout.HelpBox("배치용 폴더에 프리팹을 추가하고 새로고침하세요. 하위 폴더는 분류로 표시됩니다. W/E/R로 이동·회전·크기를 조절할 수 있습니다.", MessageType.None);
+                if (paintPrefab != null) EditorGUILayout.LabelField("선택된 오브젝트", paintPrefab.name);
+                if (sceneTool != SceneTool.None) EditorGUILayout.HelpBox(sceneTool == SceneTool.Paint ? "팔레트에서 프리팹을 선택하고 Scene을 클릭하여 반복 배치하세요. [ / ]로 15도 회전, Esc로 종료합니다." : "Scene을 클릭해 테스트 시작점을 지정하세요. Esc로 취소합니다.", MessageType.Info);
             }
+        }
+        void DrawSectionList()
+        {
+            showSections = EditorGUILayout.Foldout(showSections, "기존 구간 열기 (" + sections.Count + ")", true);
+            if (!showSections) return;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                sectionSearch = EditorGUILayout.TextField("검색", sectionSearch);
+                if (GUILayout.Button("갱신", GUILayout.Width(48))) { AssetDatabase.Refresh(); ReloadSections(); }
+            }
+            sectionScroll = EditorGUILayout.BeginScrollView(sectionScroll, GUILayout.Height(Mathf.Clamp(sections.Count * 24, 40, 120)));
+            int shown = 0;
+            foreach (var entry in sections)
+            {
+                if (!string.IsNullOrWhiteSpace(sectionSearch) && entry.displayName.IndexOf(sectionSearch, StringComparison.OrdinalIgnoreCase) < 0 && entry.scenePath.IndexOf(sectionSearch, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                shown++;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(new GUIContent(entry.displayName + (string.IsNullOrEmpty(entry.id) ? "" : "  [" + entry.id + "]"), entry.scenePath));
+                    if (GUILayout.Button("열기", GUILayout.Width(48))) { MapSectionBrowser.OpenSection(entry.scenePath, true); GUIUtility.ExitGUI(); }
+                }
+            }
+            if (shown == 0) EditorGUILayout.LabelField("표시할 구간이 없습니다.", EditorStyles.miniLabel);
+            EditorGUILayout.EndScrollView();
         }
         void HandleSceneDrag(SceneView sceneView)
         {
             var section = CurrentSection(); var e = Event.current;
             if (section == null || EditorApplication.isPlaying) return;
+            if (e.rawType == EventType.MouseDown && e.button == 0 && !e.alt && Tools.current == Tool.Rect) BeginRectDrag(section);
+            if (e.rawType == EventType.MouseUp && e.button == 0 && rectDragging) { EditorApplication.delayCall -= EndRectDrag; EditorApplication.delayCall += EndRectDrag; }
             if (sceneTool != SceneTool.None) sceneView.wantsMouseMove = true;
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape && sceneTool != SceneTool.None) { sceneTool = SceneTool.None; previewPrefab = null; e.Use(); Repaint(); return; }
             if (sceneTool == SceneTool.Paint && e.type == EventType.KeyDown && (e.keyCode == KeyCode.LeftBracket || e.keyCode == KeyCode.RightBracket))

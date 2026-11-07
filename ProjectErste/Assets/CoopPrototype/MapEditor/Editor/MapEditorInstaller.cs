@@ -30,6 +30,7 @@ namespace ShapeCoop.Editor
             CreateGoal(square);
             CreateConnector("Connector_Entrance", MapConnectorKind.Entrance);
             CreateConnector("Connector_Exit", MapConnectorKind.Exit);
+            MapGimmickInstaller.EnsureAssets();
             AssetDatabase.SaveAssets();
         }
         static Sprite CreateSprite(string name, int shape)

@@ -9,20 +9,37 @@ namespace ShapeCoop
         public float move;
         public int jump, dash, freeze;
         public bool jumpHeld;
+        public int emoteSequence, emoteRequested;
+        public bool emoteHeld;
+        public float emoteX, emoteY;
         public double elapsed;
         public bool completed;
         public PlayerData[] players;
         public BodyData ball;
+        public GimmickData[] gimmicks;
     }
     [Serializable] public sealed class PlayerData
     {
         public string id, name;
         public int shape, color;
+        public bool hasCharacterLayout;
+        public float characterSize, helmetOffsetX, helmetOffsetY, helmetSize;
         public BodyData body;
     }
     [Serializable] public sealed class BodyData
     {
         public float x, y, angle;
         public bool frozen;
+        public bool stunned, forcedFrozen;
+        public float velocityX, velocityY, angularVelocity;
+        public bool idleEyes;
+        public int emoteType, emoteSequence;
+        public float emoteX, emoteY, emoteElapsed;
+    }
+    [Serializable] public sealed class GimmickData
+    {
+        public int index;
+        public bool active, broken, shielded;
+        public float progress, offset, angle, beamLength, shieldX, shieldY, shieldHalfWidth;
     }
 }

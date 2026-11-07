@@ -20,6 +20,11 @@ namespace ShapeCoop
         public float ballMass = 1.2f;
         [Range(0f, 1f)] public float ballBounciness = .75f;
         public float gravityScale = 2f;
+        [Header("Character eyes")]
+        [Min(0f)] public float eyeLookDistance = .06f;
+        [Min(.1f)] public float eyeReturnSpeed = 10f;
+        [Min(.1f)] public float idleLookMinDelay = 3f;
+        [Min(.1f)] public float idleLookMaxDelay = 7f;
         [Header("Network")]
         [Range(5, 30)] public int snapshotsPerSecond = 20;
         public float peerTimeout = 12f;

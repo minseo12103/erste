@@ -49,6 +49,15 @@ namespace ShapeCoop.Editor
                 var custom = items.Find(item => item.path == path);
                 Check(custom != null && custom.prefab != null && custom.category == folderName && custom.label.Contains("CustomObject"), "custom prefab discovery or category failed");
                 Check(items.Exists(item => item.path == MapEditorInstaller.PalettePath + "/Terrain_Box.prefab" && item.category == "지형"), "existing palette category missing");
+                AssetDatabase.SetLabels(custom.prefab, new[] { "unrelated-existing-label" });
+                MapPaletteTags.SetTags(custom.prefab, new[] { "기능 오브젝트", "장식", "장식" });
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                var reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                var savedTags = MapPaletteTags.GetTags(reloaded);
+                Check(savedTags.Length == 2 && Array.IndexOf(savedTags, "기능 오브젝트") >= 0 && Array.IndexOf(savedTags, "장식") >= 0, "prefab tags did not persist");
+                Check(Array.IndexOf(AssetDatabase.GetLabels(reloaded), "unrelated-existing-label") >= 0, "unrelated labels were overwritten");
+                MapPaletteTags.SetTags(reloaded, Array.Empty<string>());
+                Check(MapPaletteTags.GetTags(reloaded).Length == 0, "explicitly cleared tags should remain empty");
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(custom.prefab);
                 Check(instance != null && PrefabUtility.GetCorrespondingObjectFromSource(instance) == custom.prefab, "discovered prefab cannot be instantiated");
                 Object.DestroyImmediate(instance);
@@ -84,6 +93,8 @@ namespace ShapeCoop.Editor
                 string secondScene = second.gameObject.scene.path, secondPrefab = second.prefabPath;
                 Set("folder2", Path.GetDirectoryName(secondScene).Replace('\\', '/')); Set("prefab2", secondPrefab);
                 Check(second.sectionId != firstAsset.sectionId && secondScene != firstScene, "same-name sections need unique paths and IDs");
+                var found = MapSectionBrowser.FindSections();
+                Check(found.Exists(entry => entry.scenePath == firstScene && entry.displayName == "__MapValidation") && found.Exists(entry => entry.scenePath == secondScene && entry.displayName == "__MapValidation"), "section browser must find both same-name scenes");
                 Place(second, "Terrain_Triangle", Vector2.zero, Vector2.one);
                 Place(second, "Connector_Entrance", new Vector2(-1,0), Vector2.one);
                 Check(MapEditorWindow.ExportSection(second, false), "second prefab export failed");
@@ -106,9 +117,11 @@ namespace ShapeCoop.Editor
                 var saved = AssetDatabase.LoadAssetAtPath<GameObject>(copy).GetComponent<PrototypeGame>().mapSections;
                 Check(saved.Length == 2 && saved[0].prefab == a && saved[1].prefab == b && Vector2.Distance(saved[1].position, new Vector2(10, 0)) < .001f, "game prefab assembly mismatch");
                 Debug.Log("SHAPE_MAP_ASSEMBLY_VALIDATION_OK");
-                EditorSceneManager.OpenScene(firstScene, OpenSceneMode.Single);
+                Check(MapSectionBrowser.OpenSection(firstScene, false), "section browser could not open an existing scene");
                 test = Object.FindFirstObjectByType<MapTestRunner>(); Check(test != null && test.testStart != null, "reopened scene must retain test marker");
                 test.shape = MapTestShape.Triangle; test.spawnBallNearTestStart = false; test.useCustomBallStart = true; test.customBallStart = new Vector2(2, 1.5f);
+                var initialCamera = Object.FindFirstObjectByType<Camera>();
+                if (initialCamera != null) Object.DestroyImmediate(initialCamera.gameObject);
                 EditorSceneManager.MarkSceneDirty(test.gameObject.scene); EditorSceneManager.SaveScene(test.gameObject.scene);
                 Int("shape", 0); Int("phase", 0); Set("error", ""); SessionState.SetBool(Prefix + "active", true);
                 Debug.Log("SHAPE_MAP_ASSET_CHECK_OK");
@@ -127,6 +140,16 @@ namespace ShapeCoop.Editor
             Int("shape", next);
             var test = Object.FindFirstObjectByType<MapTestRunner>();
             if (test == null) { Debug.LogError("Map test runner missing after play mode."); Finish(false); return; }
+            if (next == 1)
+            {
+                var untagged = new GameObject("Existing untagged test camera", typeof(Camera));
+                untagged.GetComponent<Camera>().orthographic = true;
+            }
+            else if (next == 2)
+            {
+                var camera = Object.FindFirstObjectByType<Camera>();
+                if (camera != null) camera.enabled = false;
+            }
             test.shape = (MapTestShape)next; EditorSceneManager.MarkSceneDirty(test.gameObject.scene); EditorSceneManager.SaveScene(test.gameObject.scene);
             EditorApplication.delayCall += EditorApplication.EnterPlaymode;
         }
@@ -144,6 +167,10 @@ namespace ShapeCoop.Editor
                     Check(player.shape == Int("shape") && player.body.simulated && player.body.bodyType == RigidbodyType2D.Dynamic, "selected shape or physics incorrect");
                     Check(Vector2.Distance(player.spawn, test.testStart.transform.position) < .01f, "test start position ignored");
                     Check(Vector2.Distance(Field<Vector2>(test, "ballSpawn"), test.customBallStart) < .01f, "custom ball test start ignored");
+                    var camera = Field<Camera>(test, "testCamera");
+                    Check(camera != null && camera.isActiveAndEnabled && camera.targetTexture == null, "test camera missing or not rendering");
+                    Check(camera.name == (Int("shape") == 1 ? "Existing untagged test camera" : "Map test camera (runtime)"), "wrong camera selected for test");
+                    Check(Vector2.Distance(camera.transform.position, (Vector2)player.transform.position + Vector2.up) < .5f, "test camera does not follow player");
                     Check((player.shape == 0 && player.shapeCollider is PolygonCollider2D) || (player.shape == 1 && player.shapeCollider is BoxCollider2D) || (player.shape == 2 && player.shapeCollider is CircleCollider2D), "incorrect player collider");
                     player.freezePending = true; Int("phase", 2); SessionState.SetFloat(Prefix + "until", (float)EditorApplication.timeSinceStartup + .15f); return;
                 }
