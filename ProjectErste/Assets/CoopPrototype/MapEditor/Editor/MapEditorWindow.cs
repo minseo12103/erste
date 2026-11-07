@@ -23,6 +23,11 @@ namespace ShapeCoop.Editor
         int category;
         Vector2 scroll, dragStart;
         GameObject dragged;
+        GameObject paintPrefab, previewPrefab;
+        Vector3 previewPosition;
+        enum SceneTool { None, Paint, PlayerStart, BallStart }
+        SceneTool sceneTool;
+        float placementRotation;
         bool snap;
         float grid;
 
@@ -90,6 +95,8 @@ namespace ShapeCoop.Editor
                         case "Marker_PlayerStart": group = "시작 지점"; label = "플레이어 시작"; break;
                         case "Marker_BallStart": group = "시작 지점"; label = "공 시작"; break;
                         case "Goal_Area": group = "목표"; label = "목표 구역"; break;
+                        case "Connector_Entrance": group = "연결점"; label = "구간 입구"; break;
+                        case "Connector_Exit": group = "연결점"; label = "구간 출구"; break;
                     }
                 }
                 items.Add(new PaletteItem { prefab = prefab, path = path, label = label, category = group });
@@ -124,6 +131,7 @@ namespace ShapeCoop.Editor
         {
             EditorGUILayout.LabelField("맵 구간 에디터", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox("각 구간은 별도 폴더의 작업 씬과 프리팹으로 저장됩니다. 목록의 항목을 Scene 화면으로 끌어다 놓으세요.", MessageType.Info);
+            if (GUILayout.Button("맵 구간 조합 화면 열기")) MapAssemblyWindow.Open();
             if (!AssetDatabase.IsValidFolder(MapEditorInstaller.PalettePath))
             {
                 EditorGUILayout.HelpBox("팔레트 리소스가 없습니다.", MessageType.Warning);
@@ -160,6 +168,12 @@ namespace ShapeCoop.Editor
                     { Undo.RecordObject(test, "Set test start"); test.testStart = selected; EditorSceneManager.MarkSceneDirty(test.gameObject.scene); }
                     else ShowNotification(new GUIContent("이 구간의 시작 마커를 선택하세요"));
                 }
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("플레이어 위치 클릭 지정")) { sceneTool = SceneTool.PlayerStart; previewPrefab = null; SceneView.RepaintAll(); }
+                    if (GUILayout.Button("공 위치 클릭 지정")) { sceneTool = SceneTool.BallStart; previewPrefab = null; SceneView.RepaintAll(); }
+                }
+                if (!test.spawnBallNearTestStart && test.useCustomBallStart) EditorGUILayout.LabelField("테스트 공 시작", test.customBallStart.ToString("F2"));
                 if (GUILayout.Button("선택 도형으로 테스트 실행", GUILayout.Height(28)))
                 {
                     if (test.testStart == null || !test.testStart.transform.IsChildOf(section.transform)) EditorUtility.DisplayDialog("테스트 시작 지점", "현재 구간의 시작 마커를 지정하세요.", "확인");
@@ -176,6 +190,14 @@ namespace ShapeCoop.Editor
                 EditorGUI.BeginChangeCheck(); snap = EditorGUILayout.Toggle("격자 맞춤", snap);
                 if (snap) grid = Mathf.Max(.05f, EditorGUILayout.FloatField("격자 간격", grid));
                 if (EditorGUI.EndChangeCheck()) { EditorPrefs.SetBool("ShapeCoop.MapSnap", snap); EditorPrefs.SetFloat("ShapeCoop.MapGrid", grid); }
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    bool painting = GUILayout.Toggle(sceneTool == SceneTool.Paint, "연속 배치", "Button");
+                    if (painting && sceneTool != SceneTool.Paint) sceneTool = SceneTool.Paint;
+                    else if (!painting && sceneTool == SceneTool.Paint) { sceneTool = SceneTool.None; previewPrefab = null; SceneView.RepaintAll(); }
+                    placementRotation = EditorGUILayout.FloatField("회전 °", placementRotation);
+                }
+                if (sceneTool != SceneTool.None) EditorGUILayout.HelpBox(sceneTool == SceneTool.Paint ? "목록에서 프리팹을 선택하고 Scene을 클릭하여 반복 배치하세요. [ / ]로 15도 회전, Esc로 종료합니다." : "Scene을 클릭해 테스트 시작점을 지정하세요. Esc로 취소합니다.", MessageType.Info);
                 scroll = EditorGUILayout.BeginScrollView(scroll);
                 foreach (var item in palette)
                 {
@@ -183,17 +205,15 @@ namespace ShapeCoop.Editor
                     if (!string.IsNullOrWhiteSpace(search) && item.label.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0 && item.path.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0) continue;
                     var asset = item.prefab;
                     if (asset == null) continue;
-                    var rect = GUILayoutUtility.GetRect(100, 33, GUILayout.ExpandWidth(true));
+                    var rect = GUILayoutUtility.GetRect(100, 48, GUILayout.ExpandWidth(true));
                     GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
-                    var sprite = asset.GetComponent<SpriteRenderer>();
-                    if (sprite != null && sprite.sprite != null)
-                    {
-                        var oldColor = GUI.color; GUI.color = sprite.color;
-                        GUI.DrawTexture(new Rect(rect.x + 5, rect.y + 4, 24, 24), sprite.sprite.texture, ScaleMode.ScaleToFit, true);
-                        GUI.color = oldColor;
-                    }
-                    else { var icon = AssetPreview.GetMiniThumbnail(asset); if (icon != null) GUI.DrawTexture(new Rect(rect.x + 5, rect.y + 4, 24, 24), icon, ScaleMode.ScaleToFit); }
-                    GUI.Label(new Rect(rect.x + 35, rect.y + 5, rect.width - 40, 24), new GUIContent(item.label + "  [끌어서 배치]", item.path));
+                    var icon = AssetPreview.GetAssetPreview(asset) ?? AssetPreview.GetMiniThumbnail(asset);
+                    if (icon != null) GUI.DrawTexture(new Rect(rect.x + 5, rect.y + 4, 40, 40), icon, ScaleMode.ScaleToFit, true);
+                    if (AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID())) Repaint();
+                    GUI.Label(new Rect(rect.x + 50, rect.y + 3, rect.width - 55, 22), new GUIContent(item.label, item.path));
+                    var renderer = asset.GetComponentInChildren<Renderer>(true);
+                    string dimensions = renderer == null ? "" : "  크기 " + renderer.bounds.size.x.ToString("0.##") + " × " + renderer.bounds.size.y.ToString("0.##");
+                    GUI.Label(new Rect(rect.x + 50, rect.y + 23, rect.width - 55, 20), (paintPrefab == asset && sceneTool == SceneTool.Paint ? "선택됨" : "끌어서 배치") + dimensions, EditorStyles.miniLabel);
                     var e = Event.current;
                     int control = GUIUtility.GetControlID(FocusType.Passive, rect);
                     var type = e.GetTypeForControl(control);
@@ -202,7 +222,7 @@ namespace ShapeCoop.Editor
                     else if (type == EventType.MouseDrag && GUIUtility.hotControl == control && dragged == asset && Vector2.Distance(e.mousePosition, dragStart) > 3)
                     { GUIUtility.hotControl = 0; DragAndDrop.PrepareStartDrag(); DragAndDrop.objectReferences = new UnityEngine.Object[] { asset }; DragAndDrop.StartDrag(item.label); dragged = null; e.Use(); }
                     else if (type == EventType.MouseUp && GUIUtility.hotControl == control)
-                    { GUIUtility.hotControl = 0; dragged = null; if (rect.Contains(e.mousePosition)) EditorGUIUtility.PingObject(asset); e.Use(); }
+                    { GUIUtility.hotControl = 0; dragged = null; if (rect.Contains(e.mousePosition)) { if (sceneTool == SceneTool.Paint) { paintPrefab = asset; SceneView.RepaintAll(); } else EditorGUIUtility.PingObject(asset); } e.Use(); }
                 }
                 EditorGUILayout.EndScrollView();
                 EditorGUILayout.HelpBox("배치용 폴더에 프리팹을 추가하고 새로고침하세요. 하위 폴더는 분류로 표시됩니다. W/E/R로 이동·회전·크기를 조절할 수 있습니다.", MessageType.None);
@@ -211,26 +231,78 @@ namespace ShapeCoop.Editor
         void HandleSceneDrag(SceneView sceneView)
         {
             var section = CurrentSection(); var e = Event.current;
-            if (section == null || EditorApplication.isPlaying || (e.type != EventType.DragUpdated && e.type != EventType.DragPerform)) return;
-            if (DragAndDrop.objectReferences.Length != 1 || !(DragAndDrop.objectReferences[0] is GameObject asset)) return;
-            var path = AssetDatabase.GetAssetPath(asset);
-            if (!path.StartsWith(MapEditorInstaller.PalettePath + "/", StringComparison.Ordinal)) return;
+            if (section == null || EditorApplication.isPlaying) return;
+            if (sceneTool != SceneTool.None) sceneView.wantsMouseMove = true;
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape && sceneTool != SceneTool.None) { sceneTool = SceneTool.None; previewPrefab = null; e.Use(); Repaint(); return; }
+            if (sceneTool == SceneTool.Paint && e.type == EventType.KeyDown && (e.keyCode == KeyCode.LeftBracket || e.keyCode == KeyCode.RightBracket))
+            { placementRotation += e.keyCode == KeyCode.LeftBracket ? -15 : 15; e.Use(); Repaint(); sceneView.Repaint(); }
+            if (e.type == EventType.DragExited) { previewPrefab = null; sceneView.Repaint(); return; }
+            bool dragging = (e.type == EventType.DragUpdated || e.type == EventType.DragPerform) && DragAndDrop.objectReferences.Length == 1 && DragAndDrop.objectReferences[0] is GameObject;
+            GameObject asset = dragging ? DragAndDrop.objectReferences[0] as GameObject : sceneTool == SceneTool.Paint ? paintPrefab : null;
+            if (dragging && !AssetDatabase.GetAssetPath(asset).StartsWith(MapEditorInstaller.PalettePath + "/", StringComparison.Ordinal)) return;
+            if (e.type == EventType.Repaint && previewPrefab != null) DrawPreview(previewPrefab, previewPosition);
+            bool clickTool = sceneTool != SceneTool.None && !e.alt;
+            if (clickTool && e.type == EventType.Layout) HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
+            if (!dragging && !clickTool) return;
             var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
             var plane = new Plane(Vector3.forward, Vector3.zero);
             if (!plane.Raycast(ray, out float distance)) return;
             var position = ray.GetPoint(distance); position.z = 0;
             if (snap) { position.x = Mathf.Round(position.x / grid) * grid; position.y = Mathf.Round(position.y / grid) * grid; }
-            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-            if (e.type == EventType.DragPerform)
+            if (asset != null && (dragging || sceneTool == SceneTool.Paint) && (e.type == EventType.MouseMove || e.type == EventType.DragUpdated))
+            { previewPrefab = asset; previewPosition = position; sceneView.Repaint(); }
+            if (dragging) DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+            if (e.type == EventType.DragPerform || (!dragging && clickTool && e.type == EventType.MouseDown && e.button == 0))
             {
-                DragAndDrop.AcceptDrag();
-                var instance = (GameObject)PrefabUtility.InstantiatePrefab(asset, section.gameObject.scene);
-                Undo.RegisterCreatedObjectUndo(instance, "Place map object");
-                Undo.SetTransformParent(instance.transform, section.transform, "Place map object");
-                instance.transform.position = position; Selection.activeGameObject = instance;
-                EditorSceneManager.MarkSceneDirty(section.gameObject.scene);
+                if (dragging) DragAndDrop.AcceptDrag();
+                if (asset != null) PlacePrefab(section, asset, position, placementRotation);
+                else if (sceneTool == SceneTool.PlayerStart || sceneTool == SceneTool.BallStart)
+                {
+                    var test = CurrentTest();
+                    if (test != null && sceneTool == SceneTool.PlayerStart)
+                    {
+                        if (test.testStart == null || test.testStart.kind != MapMarkerKind.TestStart || !test.testStart.transform.IsChildOf(section.transform))
+                        {
+                            var markerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(MapEditorInstaller.PalettePath + "/Marker_TestStart.prefab");
+                            var marker = markerPrefab == null ? null : PlacePrefab(section, markerPrefab, position, 0);
+                            if (marker != null) { Undo.RecordObject(test, "Set test start"); test.testStart = marker.GetComponent<MapMarker>(); }
+                        }
+                        if (test.testStart != null && test.testStart.kind == MapMarkerKind.TestStart && test.testStart.transform.IsChildOf(section.transform))
+                        { Undo.RecordObject(test.testStart.transform, "Move test start"); test.testStart.transform.position = position; }
+                    }
+                    else if (test != null && sceneTool == SceneTool.BallStart)
+                    { Undo.RecordObject(test, "Set test ball start"); test.spawnBallNearTestStart = false; test.useCustomBallStart = true; test.customBallStart = position; }
+                    EditorSceneManager.MarkSceneDirty(section.gameObject.scene); sceneTool = SceneTool.None; Repaint();
+                }
+                if (dragging) previewPrefab = null;
+                e.Use();
             }
-            e.Use();
+            else if (dragging) e.Use();
+        }
+        public static GameObject PlacePrefab(MapSection section, GameObject asset, Vector3 position, float rotation)
+        {
+            if (section == null || asset == null) return null;
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(asset, section.gameObject.scene);
+            Undo.RegisterCreatedObjectUndo(instance, "Place map object"); Undo.SetTransformParent(instance.transform, section.transform, "Place map object");
+            instance.transform.position = position; instance.transform.rotation = Quaternion.Euler(0, 0, rotation) * asset.transform.rotation;
+            Selection.activeGameObject = instance; EditorSceneManager.MarkSceneDirty(section.gameObject.scene); return instance;
+        }
+        void DrawPreview(GameObject asset, Vector3 position)
+        {
+            var renderer = asset.GetComponentInChildren<Renderer>(true);
+            var size = renderer != null ? renderer.bounds.size : Vector3.one;
+            if (size.x < .01f || size.y < .01f) size = Vector3.one;
+            var previous = Handles.matrix; Handles.matrix = Matrix4x4.TRS(position, Quaternion.Euler(0, 0, placementRotation), Vector3.one);
+            Handles.color = Color.cyan; Handles.DrawWireCube(Vector3.zero, new Vector3(size.x, size.y, 0)); Handles.matrix = previous; Handles.color = Color.white;
+            var image = AssetPreview.GetAssetPreview(asset);
+            if (image == null) { SceneView.RepaintAll(); return; }
+            var center = HandleUtility.WorldToGUIPoint(position);
+            float width = Mathf.Clamp(Vector2.Distance(center, HandleUtility.WorldToGUIPoint(position + Vector3.right * size.x)), 20, 600);
+            float height = Mathf.Clamp(Vector2.Distance(center, HandleUtility.WorldToGUIPoint(position + Vector3.up * size.y)), 20, 600);
+            Handles.BeginGUI(); var old = GUI.color; GUI.color = new Color(1, 1, 1, .55f);
+            var matrix = GUI.matrix; GUIUtility.RotateAroundPivot(-placementRotation, center);
+            GUI.DrawTexture(new Rect(center.x - width / 2, center.y - height / 2, width, height), image, ScaleMode.ScaleToFit, true);
+            GUI.matrix = matrix; GUI.color = old; Handles.EndGUI();
         }
         public static MapSection CreateSection(string name, bool prompt)
         {
@@ -271,6 +343,7 @@ namespace ShapeCoop.Editor
                 if (showDialog) EditorUtility.DisplayDialog("저장할 수 없음", "새 구간 만들기로 생성한 작업 씬에서 해당 구간을 저장하세요.", "확인");
                 return false;
             }
+            if (!MapValidation.Confirm(MapValidation.Section(section), "구간 저장", showDialog)) return false;
             if (!EditorSceneManager.SaveScene(scene)) return false;
             PrefabUtility.SaveAsPrefabAsset(section.gameObject, expected, out bool success);
             if (success) { AssetDatabase.SaveAssets(); EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<GameObject>(expected)); }

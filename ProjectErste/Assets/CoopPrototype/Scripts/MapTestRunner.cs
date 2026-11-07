@@ -13,6 +13,8 @@ namespace ShapeCoop
         public MapTestShape shape;
         public PrototypeSettings settingsSource;
         public bool spawnBallNearTestStart = true;
+        public bool useCustomBallStart;
+        public Vector2 customBallStart;
         public Vector2 ballOffset = new Vector2(2, 0);
         public bool followPlayer = true;
         public float cameraSize = 7f;
@@ -33,7 +35,7 @@ namespace ShapeCoop
             player = playerObject.AddComponent<PrototypePlayer>();
             player.Initialize(config, new PlayerData { id = "local", name = "Test", shape = (int)shape, color = 0 }, spawn, true);
             var ballMarker = FindMarker(MapMarkerKind.BallStart);
-            ballSpawn = !spawnBallNearTestStart && ballMarker != null ? (Vector2)ballMarker.transform.position : spawn + ballOffset;
+            ballSpawn = spawnBallNearTestStart ? spawn + ballOffset : useCustomBallStart ? customBallStart : ballMarker != null ? (Vector2)ballMarker.transform.position : spawn + ballOffset;
             var ballObject = new GameObject("Test goal ball (runtime)");
             ball = ballObject.AddComponent<Rigidbody2D>(); ball.mass = config.ballMass; ball.gravityScale = config.gravityScale;
             ball.interpolation = RigidbodyInterpolation2D.Interpolate; ball.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
@@ -81,5 +83,13 @@ namespace ShapeCoop
             if (GUI.Button(new Rect(22, 85, 135, 27), "Restart test")) ResetTest();
         }
         void OnDestroy() { if (ballMaterial != null) Destroy(ballMaterial); }
+#if UNITY_EDITOR
+        void OnDrawGizmos()
+        {
+            if (spawnBallNearTestStart || !useCustomBallStart) return;
+            Gizmos.color = Color.yellow; Gizmos.DrawWireSphere(customBallStart, .6f);
+            UnityEditor.Handles.Label((Vector3)customBallStart + Vector3.up * .7f, "테스트 공 시작");
+        }
+#endif
     }
 }

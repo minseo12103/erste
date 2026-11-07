@@ -72,6 +72,7 @@ namespace ShapeCoop.Editor
                 Place(first, "Marker_PlayerStart", new Vector2(-3,.6f), Vector2.one);
                 Place(first, "Marker_BallStart", new Vector2(-1,.6f), Vector2.one);
                 Place(first, "Goal_Area", new Vector2(5,1), new Vector2(2,2));
+                Place(first, "Connector_Exit", new Vector2(9,0), Vector2.one);
                 Check(MapEditorWindow.ExportSection(first, false), "first prefab export failed");
                 string firstGuid = AssetDatabase.AssetPathToGUID(firstPrefab);
                 Check(!string.IsNullOrEmpty(firstGuid), "exported prefab missing GUID");
@@ -84,11 +85,31 @@ namespace ShapeCoop.Editor
                 Set("folder2", Path.GetDirectoryName(secondScene).Replace('\\', '/')); Set("prefab2", secondPrefab);
                 Check(second.sectionId != firstAsset.sectionId && secondScene != firstScene, "same-name sections need unique paths and IDs");
                 Place(second, "Terrain_Triangle", Vector2.zero, Vector2.one);
+                Place(second, "Connector_Entrance", new Vector2(-1,0), Vector2.one);
                 Check(MapEditorWindow.ExportSection(second, false), "second prefab export failed");
                 Check(AssetDatabase.LoadAssetAtPath<GameObject>(firstPrefab)?.GetComponent<MapSection>() != null && AssetDatabase.LoadAssetAtPath<GameObject>(secondPrefab)?.GetComponent<MapSection>() != null, "both sections must survive independent export");
+                var draft = MapAssemblyWindow.CreateDraft("__MapValidation", false);
+                string draftFolder = Path.GetDirectoryName(draft.gameObject.scene.path).Replace('\\', '/'); Set("folder3", draftFolder);
+                var a = AssetDatabase.LoadAssetAtPath<GameObject>(firstPrefab).GetComponent<MapSection>();
+                var b = AssetDatabase.LoadAssetAtPath<GameObject>(secondPrefab).GetComponent<MapSection>();
+                var aInstance = MapAssemblyWindow.AddSection(draft, a, Vector2.zero);
+                var bInstance = MapAssemblyWindow.AddSection(draft, b, new Vector2(25, 3));
+                Check(aInstance != null && bInstance != null && MapAssemblyWindow.AlignToPrevious(draft, bInstance.transform), "assembly connector alignment failed");
+                Check(Vector2.Distance(bInstance.transform.localPosition, new Vector2(10, 0)) < .001f, "aligned section position incorrect");
+                var valid = MapValidation.Assembly(draft); Check(valid.errors.Count == 0, "valid assembly rejected: " + valid.Message());
+                var misplaced = new GameObject("not a section"); misplaced.transform.SetParent(draft.transform);
+                Check(MapValidation.Assembly(draft).errors.Count > 0, "invalid assembly should be rejected"); Object.DestroyImmediate(misplaced);
+                Check(MapAssemblyWindow.SaveDraft(draft, false), "assembly scene save failed");
+                string copy = draftFolder + "/SystemCopy.prefab";
+                Check(AssetDatabase.CopyAsset("Assets/CoopPrototype/Prefabs/PrototypeSystem.prefab", copy), "could not create disposable system prefab");
+                Check(MapAssemblyWindow.ApplyToPrefab(draft, copy, false), "applying assembly to system failed");
+                var saved = AssetDatabase.LoadAssetAtPath<GameObject>(copy).GetComponent<PrototypeGame>().mapSections;
+                Check(saved.Length == 2 && saved[0].prefab == a && saved[1].prefab == b && Vector2.Distance(saved[1].position, new Vector2(10, 0)) < .001f, "game prefab assembly mismatch");
+                Debug.Log("SHAPE_MAP_ASSEMBLY_VALIDATION_OK");
                 EditorSceneManager.OpenScene(firstScene, OpenSceneMode.Single);
                 test = Object.FindFirstObjectByType<MapTestRunner>(); Check(test != null && test.testStart != null, "reopened scene must retain test marker");
-                test.shape = MapTestShape.Triangle; EditorSceneManager.MarkSceneDirty(test.gameObject.scene); EditorSceneManager.SaveScene(test.gameObject.scene);
+                test.shape = MapTestShape.Triangle; test.spawnBallNearTestStart = false; test.useCustomBallStart = true; test.customBallStart = new Vector2(2, 1.5f);
+                EditorSceneManager.MarkSceneDirty(test.gameObject.scene); EditorSceneManager.SaveScene(test.gameObject.scene);
                 Int("shape", 0); Int("phase", 0); Set("error", ""); SessionState.SetBool(Prefix + "active", true);
                 Debug.Log("SHAPE_MAP_ASSET_CHECK_OK");
                 EditorApplication.EnterPlaymode();
@@ -122,6 +143,7 @@ namespace ShapeCoop.Editor
                 {
                     Check(player.shape == Int("shape") && player.body.simulated && player.body.bodyType == RigidbodyType2D.Dynamic, "selected shape or physics incorrect");
                     Check(Vector2.Distance(player.spawn, test.testStart.transform.position) < .01f, "test start position ignored");
+                    Check(Vector2.Distance(Field<Vector2>(test, "ballSpawn"), test.customBallStart) < .01f, "custom ball test start ignored");
                     Check((player.shape == 0 && player.shapeCollider is PolygonCollider2D) || (player.shape == 1 && player.shapeCollider is BoxCollider2D) || (player.shape == 2 && player.shapeCollider is CircleCollider2D), "incorrect player collider");
                     player.freezePending = true; Int("phase", 2); SessionState.SetFloat(Prefix + "until", (float)EditorApplication.timeSinceStartup + .15f); return;
                 }
@@ -148,10 +170,10 @@ namespace ShapeCoop.Editor
         {
             SessionState.SetBool(Prefix + "active", false);
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            foreach (string key in new[] { "folder1", "folder2" })
+            foreach (string key in new[] { "folder1", "folder2", "folder3" })
             {
                 string folder = Get(key);
-                if (folder.StartsWith("Assets/CoopMaps/Sections/__MapValidation_", StringComparison.Ordinal) && AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
+                if ((folder.StartsWith("Assets/CoopMaps/Sections/__MapValidation_", StringComparison.Ordinal) || folder.StartsWith("Assets/CoopMaps/Assemblies/__MapValidation_", StringComparison.Ordinal)) && AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
             }
             AssetDatabase.SaveAssets(); Debug.Log(success ? "SHAPE_MAP_VERIFICATION_OK" : "SHAPE_MAP_VERIFICATION_FAILED"); EditorApplication.Exit(success ? 0 : 1);
         }

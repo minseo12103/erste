@@ -28,6 +28,8 @@ namespace ShapeCoop.Editor
             CreateMarker("Marker_PlayerStart", MapMarkerKind.PlayerStart);
             CreateMarker("Marker_BallStart", MapMarkerKind.BallStart);
             CreateGoal(square);
+            CreateConnector("Connector_Entrance", MapConnectorKind.Entrance);
+            CreateConnector("Connector_Exit", MapConnectorKind.Exit);
             AssetDatabase.SaveAssets();
         }
         static Sprite CreateSprite(string name, int shape)
@@ -77,6 +79,13 @@ namespace ShapeCoop.Editor
             var renderer = go.AddComponent<SpriteRenderer>(); renderer.sprite = sprite; renderer.color = new Color(.25f,.9f,.38f,.3f);
             var collider = go.AddComponent<BoxCollider2D>(); collider.isTrigger = true;
             go.AddComponent<MapGoalArea>(); PrefabUtility.SaveAsPrefabAsset(go, path); Object.DestroyImmediate(go);
+        }
+        static void CreateConnector(string name, MapConnectorKind kind)
+        {
+            string path = PalettePath + "/" + name + ".prefab";
+            if (File.Exists(path)) return;
+            var go = new GameObject(name); go.AddComponent<MapConnector>().kind = kind;
+            PrefabUtility.SaveAsPrefabAsset(go, path); Object.DestroyImmediate(go);
         }
         public static void CreateWelcomeScene()
         {
