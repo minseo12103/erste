@@ -39,7 +39,12 @@ namespace ShapeCoop
     [Serializable] public sealed class GimmickData
     {
         public int index;
-        public bool active, broken, shielded;
-        public float progress, offset, angle, beamLength, shieldX, shieldY, shieldHalfWidth;
+        public bool active, broken, shielded, sparkHit;
+        public float progress, offset, angle, beamLength, shieldX, shieldY, shieldHalfWidth, shieldHeight;
+        public float nitrogenActiveSeconds;
+        public int cementSequence;
+        public float cementAge, cementX, cementY;
+        public bool hasCraneDimensions;
+        public float craneRadius, craneWidth, craneHeight, craneSpeed;
     }
 }

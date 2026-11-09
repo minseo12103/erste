@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ShapeCoop
 {
-    public enum MapGimmickKind { Sand, Vent, Pulley, Oil, Cement, Sparks, Crane, Sprinkler, BrickWall, Magnet, Nitrogen }
+    public enum MapGimmickKind { Sand, Vent, Pulley, Oil, Cement, Sparks, Crane, Sprinkler, BrickWall, Magnet, Nitrogen, Seesaw }
 
     // The host alone evaluates contacts and forces. Clients display host snapshots.
     public sealed class MapGimmick : MonoBehaviour
@@ -30,10 +30,11 @@ namespace ShapeCoop
         [Min(.1f)] public float beamRange = 5f;
         bool authority, initialized, active, broken, triggered;
         float timer, offset, targetOffset, angle, targetAngle, beamLength, targetBeam, pulleyVelocity;
-        bool shielded;
-        float shieldX, shieldY, shieldHalfWidth;
+        bool shielded, sparkHit;
+        float shieldX, shieldY, shieldHalfWidth, shieldHeight;
         Transform waterMain, waterLeft, waterRight;
         Vector3 initialA, initialB;
+        Vector3 initialBeamPosition;
         Quaternion initialRotation;
         Collider2D solid;
         SpriteRenderer[] renderers;
@@ -41,7 +42,15 @@ namespace ShapeCoop
         PhysicsMaterial2D oilMaterial;
         SpriteRenderer sandRenderer;
         WindVentEffect windEffect;
-        float sandProgressReceivedAt;
+        CementImpactVisual cementVisual;
+        WeldingSparkVisual weldingVisual;
+        WaterBarrierVisual waterVisual;
+        BrickWallVisual brickVisual;
+        MagnetFieldVisual magnetVisual;
+        NitrogenGeyserVisual nitrogenVisual;
+        float nitrogenDisplayDuration;
+        RotatingCranePlatforms cranePlatforms;
+        float progressReceivedAt;
         const float SandBurstDuration = .58f;
 
         public void Initialize(bool host)
@@ -52,9 +61,17 @@ namespace ShapeCoop
             var sandVisual = kind == MapGimmickKind.Sand && visual != null ? visual.Find("Sand") : null;
             sandRenderer = sandVisual != null ? sandVisual.GetComponent<SpriteRenderer>() : null;
             windEffect = kind == MapGimmickKind.Vent && visual != null ? visual.GetComponentInChildren<WindVentEffect>(true) : null;
+            cementVisual = kind == MapGimmickKind.Cement && visual != null ? visual.GetComponentInChildren<CementImpactVisual>(true) : null;
+            weldingVisual = kind == MapGimmickKind.Sparks && visual != null ? visual.GetComponentInChildren<WeldingSparkVisual>(true) : null;
+            brickVisual = kind == MapGimmickKind.BrickWall && visual != null ? visual.GetComponentInChildren<BrickWallVisual>(true) : null;
+            magnetVisual = kind == MapGimmickKind.Magnet && visual != null ? visual.GetComponentInChildren<MagnetFieldVisual>(true) : null;
+            nitrogenVisual = kind == MapGimmickKind.Nitrogen && visual != null ? visual.GetComponentInChildren<NitrogenGeyserVisual>(true) : null;
+            nitrogenDisplayDuration = activeSeconds;
             if (platformA != null) initialA = platformA.transform.localPosition;
             if (platformB != null) initialB = platformB.transform.localPosition;
-            if (rotatingBeam != null) initialRotation = rotatingBeam.transform.localRotation;
+            if (rotatingBeam != null) { initialRotation = rotatingBeam.transform.localRotation; initialBeamPosition = rotatingBeam.transform.localPosition; }
+            cranePlatforms = kind == MapGimmickKind.Crane ? GetComponent<RotatingCranePlatforms>() : null;
+            if (cranePlatforms != null) cranePlatforms.Initialize(host, rotatingBeam);
             if (kind == MapGimmickKind.Oil) oilMaterial = new PhysicsMaterial2D("Map oil") { friction = 0, bounciness = 0 };
             if (kind == MapGimmickKind.Sprinkler && visual != null)
             {
@@ -64,6 +81,8 @@ namespace ShapeCoop
                     waterLeft = Instantiate(waterMain, visual); waterLeft.name = "Water deflected left (runtime)";
                     waterRight = Instantiate(waterMain, visual); waterRight.name = "Water deflected right (runtime)";
                 }
+                waterVisual = visual.GetComponentInChildren<WaterBarrierVisual>(true);
+                if (waterVisual != null) waterVisual.Bind(waterMain, waterLeft, waterRight);
             }
             if (!host)
             {
@@ -76,10 +95,21 @@ namespace ShapeCoop
         public void ResetGimmick()
         {
             timer = offset = targetOffset = angle = targetAngle = pulleyVelocity = 0; beamLength = targetBeam = beamRange;
-            sandProgressReceivedAt = Time.time;
-            broken = triggered = shielded = false; active = kind != MapGimmickKind.Sparks && kind != MapGimmickKind.Magnet && kind != MapGimmickKind.Nitrogen;
+            progressReceivedAt = Time.time;
+            broken = triggered = shielded = sparkHit = false; active = kind != MapGimmickKind.Sparks && kind != MapGimmickKind.Magnet && kind != MapGimmickKind.Nitrogen;
             if (solid != null && (kind == MapGimmickKind.Sand || kind == MapGimmickKind.BrickWall)) solid.enabled = true;
             if (windEffect != null) windEffect.ResetAnimation();
+            if (cementVisual != null) cementVisual.ResetAnimation();
+            if (kind == MapGimmickKind.Seesaw && rotatingBeam != null)
+            {
+                rotatingBeam.transform.localPosition = initialBeamPosition;
+                if (authority)
+                {
+                    rotatingBeam.position = transform.TransformPoint(initialBeamPosition);
+                    rotatingBeam.rotation = transform.eulerAngles.z + initialRotation.eulerAngles.z;
+                    rotatingBeam.linearVelocity = Vector2.zero; rotatingBeam.angularVelocity = 0;
+                }
+            }
             ApplyMovingParts(true); RefreshVisual();
         }
         void FixedUpdate()
@@ -92,13 +122,20 @@ namespace ShapeCoop
                 timer = Mathf.Min(timer + dt, delay + SandBurstDuration);
                 if (!broken && timer >= delay) { broken = true; if (solid != null) solid.enabled = false; }
             }
+            if (kind == MapGimmickKind.Sprinkler) timer = Mathf.Repeat(timer + dt, 120f);
+            if (kind == MapGimmickKind.BrickWall && broken && brickVisual != null) timer = Mathf.Min(timer + dt, brickVisual.Duration);
             if (kind == MapGimmickKind.Sparks || kind == MapGimmickKind.Magnet || kind == MapGimmickKind.Nitrogen)
             {
                 timer += dt; float duration = active ? Mathf.Max(.02f, activeSeconds) : Mathf.Max(.02f, inactiveSeconds);
                 if (timer >= duration) { timer -= duration; active = !active; }
             }
             if (kind == MapGimmickKind.Pulley) TickPulley(dt);
-            if (kind == MapGimmickKind.Crane && rotatingBeam != null) { angle += rotationSpeed * dt; rotatingBeam.MoveRotation(transform.eulerAngles.z + initialRotation.eulerAngles.z + angle); }
+            if (kind == MapGimmickKind.Crane && rotatingBeam != null)
+            {
+                angle += rotationSpeed * dt;
+                rotatingBeam.MoveRotation(transform.eulerAngles.z + initialRotation.eulerAngles.z + angle);
+                if (cranePlatforms != null) cranePlatforms.Apply(angle, false);
+            }
             if (kind == MapGimmickKind.Sparks) TickSpark();
             if (kind == MapGimmickKind.Sprinkler) FindWaterShield();
             RefreshVisual();
@@ -118,9 +155,13 @@ namespace ShapeCoop
         void UpdateRope(Transform rope, Rigidbody2D platform)
         {
             if (rope == null || platform == null) return;
-            float top = 2.5f, bottom = Mathf.Min(top, platform.transform.localPosition.y + .175f);
+            var renderer = rope.GetComponent<SpriteRenderer>();
+            bool tiled = renderer != null && renderer.drawMode == SpriteDrawMode.Tiled;
+            float top = 2.5f, bottom = Mathf.Min(top, platform.transform.localPosition.y + (tiled ? .42f : .175f));
             rope.localPosition = new Vector3(platform.transform.localPosition.x, (top + bottom) * .5f, 0);
-            var scale = rope.localScale; scale.y = Mathf.Max(.01f, top - bottom); rope.localScale = scale;
+            float length = Mathf.Max(.01f, top - bottom);
+            if (tiled) { var size = renderer.size; size.y = length; renderer.size = size; }
+            else { var scale = rope.localScale; scale.y = length; rope.localScale = scale; }
         }
         void TickPulley(float dt)
         {
@@ -148,12 +189,13 @@ namespace ShapeCoop
         }
         void TickSpark()
         {
-            beamLength = beamRange;
+            beamLength = beamRange; sparkHit = false;
             if (!active) return;
             foreach (var hit in Physics2D.RaycastAll(transform.position, Vector2.down, beamRange))
             {
                 if (hit.collider == null || hit.collider.isTrigger || hit.collider.transform.IsChildOf(transform)) continue;
                 beamLength = hit.distance;
+                sparkHit = true;
                 var player = hit.collider.GetComponentInParent<PrototypePlayer>();
                 if (player != null) player.Stun(effectSeconds);
                 break;
@@ -186,7 +228,8 @@ namespace ShapeCoop
                 var center = transform.InverseTransformPoint(hit.bounds.center);
                 var top = transform.InverseTransformPoint(new Vector3(hit.bounds.center.x, hit.bounds.max.y));
                 var left = transform.InverseTransformPoint(new Vector3(hit.bounds.min.x, hit.bounds.center.y));
-                shieldX = center.x; shieldY = top.y; shieldHalfWidth = Mathf.Abs(center.x - left.x);
+                var bottom = transform.InverseTransformPoint(new Vector3(hit.bounds.center.x, hit.bounds.min.y));
+                shieldX = center.x; shieldY = top.y; shieldHalfWidth = Mathf.Abs(center.x - left.x); shieldHeight = Mathf.Abs(top.y - bottom.y);
             }
         }
         void RefreshWater()
@@ -214,9 +257,13 @@ namespace ShapeCoop
             var player = collision.collider.GetComponentInParent<PrototypePlayer>();
             if (kind == MapGimmickKind.Sand && (ball != null || player != null) && solid != null && collision.collider.bounds.center.y > solid.bounds.max.y - .1f) triggered = true;
             if (kind == MapGimmickKind.Cement && ball != null)
-            { var rb = ball.GetComponent<Rigidbody2D>(); rb.linearVelocity = Vector2.zero; rb.angularVelocity = 0; }
+            {
+                var rb = ball.GetComponent<Rigidbody2D>();
+                if (cementVisual != null) { Vector2 point = collision.contactCount > 0 ? collision.GetContact(0).point : rb.position; cementVisual.Impact(transform.InverseTransformPoint(point)); }
+                rb.linearVelocity = Vector2.zero; rb.angularVelocity = 0;
+            }
             if (kind == MapGimmickKind.BrickWall && ball != null && collision.relativeVelocity.magnitude >= impactSpeed)
-            { broken = true; if (solid != null) solid.enabled = false; RefreshVisual(); }
+            { broken = true; timer = 0; if (solid != null) solid.enabled = false; RefreshVisual(); }
         }
         void OnCollisionStay2D(Collision2D collision)
         {
@@ -242,6 +289,16 @@ namespace ShapeCoop
             if (platformA != null) platformA.transform.localPosition = initialA + Vector3.down * offset;
             if (platformB != null) platformB.transform.localPosition = initialB + Vector3.up * offset;
             if (rotatingBeam != null) rotatingBeam.transform.localRotation = initialRotation * Quaternion.Euler(0, 0, angle);
+            if (cranePlatforms != null)
+            {
+                if (snap && authority && rotatingBeam != null)
+                {
+                    rotatingBeam.position = transform.TransformPoint(initialBeamPosition);
+                    rotatingBeam.rotation = transform.eulerAngles.z + initialRotation.eulerAngles.z + angle;
+                    rotatingBeam.linearVelocity = Vector2.zero; rotatingBeam.angularVelocity = 0;
+                }
+                cranePlatforms.Apply(angle, snap);
+            }
         }
         void RefreshVisual()
         {
@@ -250,7 +307,7 @@ namespace ShapeCoop
             {
                 float delay = Mathf.Max(.02f, activationDelay);
                 float displayTime = timer;
-                if (!authority && triggered) displayTime += Mathf.Max(0, Time.time - sandProgressReceivedAt);
+                if (!authority && triggered) displayTime += Mathf.Max(0, Time.time - progressReceivedAt);
                 if (!broken) displayTime = Mathf.Min(displayTime, delay - .0001f);
                 int frame;
                 if (!triggered) frame = 0;
@@ -267,26 +324,80 @@ namespace ShapeCoop
                 sandRenderer.sprite = frame >= 0 ? sandFrames[frame] : null;
             }
             float alpha = !animatedSand && kind == MapGimmickKind.Sand && triggered && !broken ? Mathf.Clamp01(1f - timer / Mathf.Max(.02f, activationDelay)) : 1f;
-            if (kind == MapGimmickKind.Magnet || kind == MapGimmickKind.Nitrogen) alpha = active ? 1f : .2f;
-            for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) { var c = initialColors[i]; c.a *= broken && !(animatedSand && renderers[i] == sandRenderer) ? 0f : alpha; renderers[i].color = c; }
+            if ((kind == MapGimmickKind.Magnet && magnetVisual == null) || (kind == MapGimmickKind.Nitrogen && nitrogenVisual == null)) alpha = active ? 1f : .2f;
+            for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) { var c = initialColors[i]; c.a *= broken && brickVisual == null && !(animatedSand && renderers[i] == sandRenderer) ? 0f : alpha; renderers[i].color = c; }
+            if (brickVisual != null) brickVisual.Show(broken, timer + (!authority && broken ? Mathf.Max(0, Time.time - progressReceivedAt) : 0));
+            if (magnetVisual != null) magnetVisual.Show(active, timer + (!authority && active ? Mathf.Max(0, Time.time - progressReceivedAt) : 0));
+            if (nitrogenVisual != null) nitrogenVisual.Show(active, timer + (!authority && active ? Mathf.Max(0, Time.time - progressReceivedAt) : 0), authority ? activeSeconds : nitrogenDisplayDuration);
             if (beamVisual != null)
             {
                 beamVisual.gameObject.SetActive(active && !broken);
                 var scale = beamVisual.localScale; scale.y = Mathf.Max(.01f, beamLength); beamVisual.localScale = scale;
                 beamVisual.localPosition = new Vector3(0, -beamLength * .5f, 0);
             }
-            if (kind == MapGimmickKind.Sprinkler) RefreshWater();
+            if (weldingVisual != null)
+            {
+                // Spark gameplay is a world-down ray, even when the prefab is rotated or scaled.
+                Vector3 endWorld = transform.position + Vector3.down * beamLength;
+                if (beamVisual != null && beamVisual.parent != null)
+                {
+                    Vector3 startLocal = beamVisual.parent.InverseTransformPoint(transform.position);
+                    Vector3 endLocal = beamVisual.parent.InverseTransformPoint(endWorld);
+                    Vector3 direction = startLocal - endLocal;
+                    beamVisual.localPosition = (startLocal + endLocal) * .5f;
+                    if (direction.sqrMagnitude > .000001f) beamVisual.localRotation = Quaternion.FromToRotation(Vector3.up, direction);
+                    var scale = beamVisual.localScale; scale.y = Mathf.Max(.001f, direction.magnitude); beamVisual.localScale = scale;
+                }
+                float phase = timer + (authority ? 0 : Mathf.Max(0, Time.time - progressReceivedAt));
+                weldingVisual.Show(active && !broken, sparkHit, endWorld, phase);
+            }
+            if (kind == MapGimmickKind.Sprinkler)
+            {
+                RefreshWater();
+                if (waterVisual != null && solid is BoxCollider2D box)
+                {
+                    float left = box.offset.x - box.size.x * .5f, right = box.offset.x + box.size.x * .5f;
+                    float top = box.offset.y + box.size.y * .5f, bottom = box.offset.y - box.size.y * .5f;
+                    float gapLeft = Mathf.Clamp(shieldX - shieldHalfWidth, left, right), gapRight = Mathf.Clamp(shieldX + shieldHalfWidth, left, right);
+                    float level = Mathf.Clamp(shieldY, bottom, top);
+                    float phase = timer + (authority ? 0 : Mathf.Max(0, Time.time - progressReceivedAt));
+                    waterVisual.Show(phase, shielded, (gapLeft + gapRight) * .5f, level, gapRight - gapLeft, Mathf.Min(shieldHeight, level - bottom));
+                }
+            }
         }
-        public GimmickData Capture(int index) => new GimmickData { index = index, active = active, broken = broken, progress = kind == MapGimmickKind.Sand ? timer : 0, offset = offset, angle = angle, beamLength = beamLength, shielded = shielded, shieldX = shieldX, shieldY = shieldY, shieldHalfWidth = shieldHalfWidth };
+        public GimmickData Capture(int index)
+        {
+            float stateAngle = kind == MapGimmickKind.Seesaw && authority && rotatingBeam != null
+                ? Mathf.DeltaAngle(transform.eulerAngles.z + initialRotation.eulerAngles.z, rotatingBeam.rotation) : angle;
+            var state = new GimmickData { index = index, active = active, broken = broken, progress = (kind == MapGimmickKind.Sand || kind == MapGimmickKind.Sparks || kind == MapGimmickKind.Sprinkler || kind == MapGimmickKind.BrickWall || kind == MapGimmickKind.Magnet || kind == MapGimmickKind.Nitrogen) ? timer : 0, offset = offset, angle = stateAngle, beamLength = beamLength, shielded = shielded, sparkHit = sparkHit, shieldX = shieldX, shieldY = shieldY, shieldHalfWidth = shieldHalfWidth, shieldHeight = shieldHeight };
+            if (kind == MapGimmickKind.Nitrogen) state.nitrogenActiveSeconds = Mathf.Max(.02f, activeSeconds);
+            if (cementVisual != null) cementVisual.WriteState(state);
+            if (cranePlatforms != null)
+            {
+                state.hasCraneDimensions = true; state.craneRadius = cranePlatforms.Radius;
+                state.craneWidth = cranePlatforms.PlatformSize.x; state.craneHeight = cranePlatforms.PlatformSize.y; state.craneSpeed = rotationSpeed;
+            }
+            return state;
+        }
         public void Apply(GimmickData state, bool snap)
         {
             if (state == null || authority) return;
+            if (kind == MapGimmickKind.Nitrogen && state.nitrogenActiveSeconds >= .02f && !float.IsInfinity(state.nitrogenActiveSeconds)) nitrogenDisplayDuration = state.nitrogenActiveSeconds;
+            if (cranePlatforms != null && state.hasCraneDimensions)
+            {
+                if (!Mathf.Approximately(cranePlatforms.Radius, state.craneRadius) || !Mathf.Approximately(cranePlatforms.PlatformSize.x, state.craneWidth) || !Mathf.Approximately(cranePlatforms.PlatformSize.y, state.craneHeight))
+                    cranePlatforms.SetDimensions(state.craneRadius, new Vector2(state.craneWidth, state.craneHeight));
+                if (!float.IsNaN(state.craneSpeed) && !float.IsInfinity(state.craneSpeed)) rotationSpeed = state.craneSpeed;
+            }
             active = state.active; broken = state.broken; triggered = kind == MapGimmickKind.Sand && state.progress > 0; timer = state.progress;
-            sandProgressReceivedAt = Time.time;
+            progressReceivedAt = Time.time;
             targetOffset = state.offset; targetAngle = state.angle; targetBeam = state.beamLength;
-            shielded = state.shielded; shieldX = state.shieldX; shieldY = state.shieldY; shieldHalfWidth = state.shieldHalfWidth;
+            if (kind == MapGimmickKind.Sparks && (state.beamLength < beamLength || state.sparkHit != sparkHit)) beamLength = state.beamLength;
+            sparkHit = state.sparkHit;
+            shielded = state.shielded; shieldX = state.shieldX; shieldY = state.shieldY; shieldHalfWidth = state.shieldHalfWidth; shieldHeight = state.shieldHeight;
             if (solid != null && (kind == MapGimmickKind.Sand || kind == MapGimmickKind.BrickWall)) solid.enabled = !broken;
             if (snap && windEffect != null) windEffect.ResetAnimation();
+            if (cementVisual != null) cementVisual.ApplyState(state);
             if (snap) { offset = targetOffset; angle = targetAngle; beamLength = targetBeam; ApplyMovingParts(true); }
             RefreshVisual();
         }

@@ -1,0 +1,505 @@
+fileFormatVersion: 2
+guid: 59fb64cb2a4d22a4bbebc1db2909b1e7
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -6915914265651435856
+    second: NitrogenGeyser_Sheet_0
+  - first:
+      213: -7173333107211940536
+    second: NitrogenGeyser_Sheet_1
+  - first:
+      213: 586989138977103904
+    second: NitrogenGeyser_Sheet_2
+  - first:
+      213: 8653815647369894002
+    second: NitrogenGeyser_Sheet_3
+  - first:
+      213: 1097992922760874700
+    second: NitrogenGeyser_Sheet_4
+  - first:
+      213: -501624964001189887
+    second: NitrogenGeyser_Sheet_5
+  - first:
+      213: -8863544899001857263
+    second: NitrogenGeyser_Sheet_6
+  - first:
+      213: -5735882583978544147
+    second: NitrogenGeyser_Sheet_7
+  - first:
+      213: 3303157547176047635
+    second: NitrogenGeyser_Sheet_8
+  - first:
+      213: -372347808969245046
+    second: NitrogenGeyser_Sheet_9
+  - first:
+      213: 7029670975570741327
+    second: NitrogenGeyser_Sheet_10
+  - first:
+      213: -2436685846214966341
+    second: NitrogenGeyser_Sheet_11
+  - first:
+      213: 332341721666282044
+    second: NitrogenGeyser_Sheet_12
+  - first:
+      213: -2766181649832980398
+    second: NitrogenGeyser_Sheet_13
+  - first:
+      213: 1623902981334281039
+    second: NitrogenGeyser_Sheet_14
+  - first:
+      213: -6111043852242743100
+    second: NitrogenGeyser_Sheet_15
+  - first:
+      213: -2023428030714039621
+    second: NitrogenGeyser_Sheet_16
+  - first:
+      213: -3077449586183945513
+    second: NitrogenGeyser_Sheet_17
+  - first:
+      213: 3189162398959594431
+    second: NitrogenGeyser_Sheet_18
+  - first:
+      213: -7439766395512148257
+    second: NitrogenGeyser_Sheet_19
+  - first:
+      213: -1007646621191415619
+    second: NitrogenGeyser_Sheet_20
+  - first:
+      213: -4553542922668047447
+    second: NitrogenGeyser_Sheet_21
+  - first:
+      213: 3623448129580770175
+    second: NitrogenGeyser_Sheet_22
+  - first:
+      213: 2015780744879684260
+    second: NitrogenGeyser_Sheet_23
+  - first:
+      213: -8031884545233135564
+    second: NitrogenGeyser_Sheet_24
+  - first:
+      213: -8619754114713280487
+    second: NitrogenGeyser_Sheet_25
+  - first:
+      213: -4188664557619676292
+    second: NitrogenGeyser_Sheet_26
+  - first:
+      213: -6772043295744511439
+    second: NitrogenGeyser_Sheet_27
+  - first:
+      213: -3499027850022349828
+    second: NitrogenGeyser_Sheet_28
+  - first:
+      213: 2229879192860370980
+    second: NitrogenGeyser_Sheet_29
+  - first:
+      213: -2701849742525250835
+    second: NitrogenGeyser_Sheet_30
+  - first:
+      213: -9029057986823690317
+    second: NitrogenGeyser_Sheet_31
+  - first:
+      213: -6982865557401757713
+    second: NitrogenGeyser_Sheet_32
+  - first:
+      213: -4918314772131414147
+    second: NitrogenGeyser_Sheet_33
+  - first:
+      213: 4190647920124125786
+    second: NitrogenGeyser_Sheet_34
+  - first:
+      213: -1450707826038024598
+    second: NitrogenGeyser_Sheet_35
+  - first:
+      213: 2073303025008218638
+    second: NitrogenGeyser_Sheet_36
+  - first:
+      213: -3456274787408442688
+    second: NitrogenGeyser_Sheet_37
+  - first:
+      213: -8090829822048851482
+    second: NitrogenGeyser_Sheet_38
+  - first:
+      213: -7191823233854589423
+    second: NitrogenGeyser_Sheet_39
+  - first:
+      213: 1308604710250484907
+    second: NitrogenGeyser_Sheet_40
+  - first:
+      213: -114307063999420074
+    second: NitrogenGeyser_Sheet_41
+  - first:
+      213: -5100798918654368111
+    second: NitrogenGeyser_Sheet_42
+  - first:
+      213: 7879176353722180936
+    second: NitrogenGeyser_Sheet_43
+  - first:
+      213: -6473754980135988378
+    second: NitrogenGeyser_Sheet_44
+  - first:
+      213: -18810268481609246
+    second: NitrogenGeyser_Sheet_45
+  - first:
+      213: -1184799765206114780
+    second: NitrogenGeyser_Sheet_46
+  - first:
+      213: -4459526152466628783
+    second: NitrogenGeyser_Sheet_47
+  - first:
+      213: -894817520863593739
+    second: NitrogenGeyser_Sheet_48
+  - first:
+      213: 8227208774816623995
+    second: NitrogenGeyser_Sheet_49
+  - first:
+      213: -5657472901649543348
+    second: NitrogenGeyser_Sheet_50
+  - first:
+      213: -3874026790006475139
+    second: NitrogenGeyser_Sheet_51
+  - first:
+      213: 863552038763222975
+    second: NitrogenGeyser_Sheet_52
+  - first:
+      213: 2069673723652836716
+    second: NitrogenGeyser_Sheet_53
+  - first:
+      213: 8178212448685195897
+    second: NitrogenGeyser_Sheet_54
+  - first:
+      213: -7072111933827584621
+    second: NitrogenGeyser_Sheet_55
+  - first:
+      213: 5544569029143108260
+    second: NitrogenGeyser_Sheet_56
+  - first:
+      213: -5264595922110303926
+    second: NitrogenGeyser_Sheet_57
+  - first:
+      213: 4255649996597037482
+    second: NitrogenGeyser_Sheet_58
+  - first:
+      213: -395249903290766645
+    second: NitrogenGeyser_Sheet_59
+  - first:
+      213: -8870651064928008647
+    second: NitrogenGeyser_Sheet_60
+  - first:
+      213: 8399891010169900216
+    second: NitrogenGeyser_Sheet_61
+  - first:
+      213: -3495552551010591105
+    second: NitrogenGeyser_Sheet_62
+  - first:
+      213: 5367473713040996461
+    second: NitrogenGeyser_Sheet_63
+  - first:
+      213: 3936900576256634465
+    second: NitrogenGeyser_Sheet_64
+  - first:
+      213: 2841098107680686659
+    second: NitrogenGeyser_Sheet_65
+  - first:
+      213: 7853487348506196893
+    second: NitrogenGeyser_Sheet_66
+  - first:
+      213: -5402161429730293422
+    second: NitrogenGeyser_Sheet_67
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 0
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 128
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Nitrogen_Pipe
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 384
+        width: 256
+        height: 128
+      alignment: 9
+      pivot: {x: 0.796875, y: 0.8671875}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 2e95b50e6839bb7458d738612721e24d
+      internalID: 2046186055
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Nitrogen_Ice
+      rect:
+        serializedVersion: 2
+        x: 256
+        y: 384
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b9a353399a4caa14598bdbb189a8e8f1
+      internalID: -712889865
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Nitrogen_Gas_00
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 192
+        width: 128
+        height: 192
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f0ede95bd8de9ae42a14b836b7f951e0
+      internalID: 693911999
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Nitrogen_Gas_01
+      rect:
+        serializedVersion: 2
+        x: 128
+        y: 192
+        width: 128
+        height: 192
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e08bbdc2682f1c4458a74bf225e63b68
+      internalID: 1383078051
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Nitrogen_Gas_02
+      rect:
+        serializedVersion: 2
+        x: 256
+        y: 192
+        width: 128
+        height: 192
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 0ab5dc2ac43740441bea740f591db639
+      internalID: -1648812164
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Nitrogen_Gas_03
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 128
+        height: 192
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 19509470b1ada28439126bc308c28576
+      internalID: 220989177
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Nitrogen_Gas_04
+      rect:
+        serializedVersion: 2
+        x: 128
+        y: 0
+        width: 128
+        height: 192
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 63366cd7e9f248c46ad984ca26b065b3
+      internalID: 1289828140
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Nitrogen_Gas_05
+      rect:
+        serializedVersion: 2
+        x: 256
+        y: 0
+        width: 128
+        height: 192
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 56524f88dc6a5f347b45bd82d407d319
+      internalID: 1436865666
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: ef4a7da6b43f20f498499e3afb551504
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      Nitrogen_Gas_00: 693911999
+      Nitrogen_Gas_01: 1383078051
+      Nitrogen_Gas_02: -1648812164
+      Nitrogen_Gas_03: 220989177
+      Nitrogen_Gas_04: 1289828140
+      Nitrogen_Gas_05: 1436865666
+      Nitrogen_Ice: -712889865
+      Nitrogen_Pipe: 2046186055
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

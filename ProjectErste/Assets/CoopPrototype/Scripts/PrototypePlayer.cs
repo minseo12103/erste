@@ -31,6 +31,7 @@ namespace ShapeCoop
         CharacterShapeLayout characterLayout = CharacterShapeLayout.Default;
         PrototypeSettings settings;
         bool authority;
+        readonly ContactPoint2D[] groundContacts = new ContactPoint2D[16];
 
         public void Initialize(PrototypeSettings s, PlayerData data, Vector2 start, bool host)
         {
@@ -65,7 +66,7 @@ namespace ShapeCoop
             dashRemaining = jumpBoostRemaining = 0;
             facing = dashDirection = 1; nextDash = 0; lastJump = lastDash = lastFreeze = 0;
             remoteVelocity = Vector2.zero; remoteAngularVelocity = 0; remoteIdleEyes = false;
-            if (appearance != null) appearance.ResetEyes();
+            if (appearance != null) { appearance.ResetStatus(); appearance.ResetEyes(); }
             if (emote != null) emote.ResetState();
             body.gravityScale = settings.gravityScale;
             if (authority) { body.bodyType = RigidbodyType2D.Dynamic; body.position = spawn; body.rotation = 0; body.linearVelocity = Vector2.zero; body.angularVelocity = 0; }
@@ -74,8 +75,24 @@ namespace ShapeCoop
         }
         bool Grounded()
         {
-            var contacts = new ContactPoint2D[16]; int count = shapeCollider.GetContacts(contacts);
-            for (int i = 0; i < count; i++) if (contacts[i].normal.y > .45f) return true;
+            int count = shapeCollider.GetContacts(groundContacts);
+            for (int i = 0; i < count; i++) if (groundContacts[i].normal.y > .45f) return true;
+            return false;
+        }
+        bool TryGetCraneVelocity(out Vector2 velocity)
+        {
+            velocity = Vector2.zero;
+            int count = shapeCollider.GetContacts(groundContacts);
+            for (int i = 0; i < count; i++)
+            {
+                var contact = groundContacts[i]; if (contact.normal.y <= .45f) continue;
+                var a = contact.collider != null ? contact.collider.attachedRigidbody : null;
+                var b = contact.otherCollider != null ? contact.otherCollider.attachedRigidbody : null;
+                var other = a == body ? b : b == body ? a : null;
+                if (other == null) continue;
+                var crane = other.GetComponentInParent<RotatingCranePlatforms>();
+                if (crane != null && crane.TryGetVelocity(other, out velocity)) return true;
+            }
             return false;
         }
         void SetFrozen(bool value)
@@ -114,9 +131,11 @@ namespace ShapeCoop
             }
             if (frozen) { jumpPending = dashPending = false; return; }
             if (stunned) { jumpPending = dashPending = false; jumpBoostRemaining = dashRemaining = 0; return; }
+            bool onCrane = TryGetCraneVelocity(out Vector2 craneVelocity);
             if (Mathf.Abs(move) > .01f) facing = move < 0 ? -1 : 1;
             // Process a jump first so a dash on the same physics tick keeps it.
-            if (jumpPending && Grounded())
+            bool jumped = jumpPending && Grounded();
+            if (jumped)
             {
                 body.AddForce(Vector2.up * settings.jumpImpulse, ForceMode2D.Impulse);
                 jumpBoostRemaining = settings.jumpHoldTime;
@@ -155,7 +174,13 @@ namespace ShapeCoop
             }
             body.gravityScale = settings.gravityScale;
             Vector2 v = body.linearVelocity;
-            if (oilUntil <= 0) v.x = Mathf.MoveTowards(v.x, move * settings.moveSpeed, settings.moveAcceleration * Time.fixedDeltaTime);
+            if (oilUntil <= 0)
+            {
+                float targetX = move * settings.moveSpeed;
+                if (onCrane && Mathf.Abs(move) < .01f) targetX = craneVelocity.x;
+                v.x = Mathf.MoveTowards(v.x, targetX, settings.moveAcceleration * Time.fixedDeltaTime);
+                if (onCrane && !jumped && craneVelocity.y < 0 && v.y <= .1f) v.y = Mathf.Min(v.y, craneVelocity.y);
+            }
             else if (Mathf.Abs(move) > .01f) v.x = Mathf.MoveTowards(v.x, move * settings.moveSpeed, settings.moveAcceleration * .08f * Time.fixedDeltaTime);
             body.linearVelocity = v;
             jumpPending = dashPending = false;

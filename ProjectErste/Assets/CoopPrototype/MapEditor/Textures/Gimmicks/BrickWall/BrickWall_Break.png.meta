@@ -1,0 +1,546 @@
+fileFormatVersion: 2
+guid: ce9cec8efcdd99c48aef5dc8e6b524db
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -2793699021409497514
+    second: BrickWall_Break_0
+  - first:
+      213: 7125906438427680163
+    second: BrickWall_Break_1
+  - first:
+      213: 3273207060203801150
+    second: BrickWall_Break_2
+  - first:
+      213: -2390408520365637096
+    second: BrickWall_Break_3
+  - first:
+      213: -3768220377263836793
+    second: BrickWall_Break_4
+  - first:
+      213: 8999874269779682364
+    second: BrickWall_Break_5
+  - first:
+      213: 4612528117870880495
+    second: BrickWall_Break_6
+  - first:
+      213: -2157194413551411825
+    second: BrickWall_Break_7
+  - first:
+      213: -2319190465963549051
+    second: BrickWall_Break_8
+  - first:
+      213: 1002182069088785950
+    second: BrickWall_Break_9
+  - first:
+      213: 335709869537604999
+    second: BrickWall_Break_10
+  - first:
+      213: 150806303936841230
+    second: BrickWall_Break_11
+  - first:
+      213: -2306877624700055138
+    second: BrickWall_Break_12
+  - first:
+      213: -5346807355160566850
+    second: BrickWall_Break_13
+  - first:
+      213: 7368235485786223768
+    second: BrickWall_Break_14
+  - first:
+      213: -5587458751762080072
+    second: BrickWall_Break_15
+  - first:
+      213: -5243705838918658453
+    second: BrickWall_Break_16
+  - first:
+      213: -9134509557086773291
+    second: BrickWall_Break_17
+  - first:
+      213: -2489403862772861139
+    second: BrickWall_Break_18
+  - first:
+      213: 4339373562237533674
+    second: BrickWall_Break_19
+  - first:
+      213: 1037286939337409122
+    second: BrickWall_Break_20
+  - first:
+      213: -4678007849189650074
+    second: BrickWall_Break_21
+  - first:
+      213: -2534572758422575440
+    second: BrickWall_Break_22
+  - first:
+      213: -5876003135628077816
+    second: BrickWall_Break_23
+  - first:
+      213: -2412275575593835736
+    second: BrickWall_Break_24
+  - first:
+      213: -562828460391252389
+    second: BrickWall_Break_25
+  - first:
+      213: -225544552850029361
+    second: BrickWall_Break_26
+  - first:
+      213: -4005837576606655571
+    second: BrickWall_Break_27
+  - first:
+      213: -2357101741329193706
+    second: BrickWall_Break_28
+  - first:
+      213: -9203486717780070491
+    second: BrickWall_Break_29
+  - first:
+      213: 7376099856469574082
+    second: BrickWall_Break_30
+  - first:
+      213: -5043853097118735292
+    second: BrickWall_Break_31
+  - first:
+      213: -8610565471080440211
+    second: BrickWall_Break_32
+  - first:
+      213: 595533360427099415
+    second: BrickWall_Break_33
+  - first:
+      213: -5253703826202609352
+    second: BrickWall_Break_34
+  - first:
+      213: 6447200882804232803
+    second: BrickWall_Break_35
+  - first:
+      213: -8364687043469334489
+    second: BrickWall_Break_36
+  - first:
+      213: 7953129901813024647
+    second: BrickWall_Break_37
+  - first:
+      213: -6844930979193369192
+    second: BrickWall_Break_38
+  - first:
+      213: -248747296423784091
+    second: BrickWall_Break_39
+  - first:
+      213: 8843117605316205030
+    second: BrickWall_Break_40
+  - first:
+      213: 2422330261914379658
+    second: BrickWall_Break_41
+  - first:
+      213: -9118558871893148855
+    second: BrickWall_Break_42
+  - first:
+      213: 6700197795802075820
+    second: BrickWall_Break_43
+  - first:
+      213: -2622138390518970673
+    second: BrickWall_Break_44
+  - first:
+      213: -4518003418554902964
+    second: BrickWall_Break_45
+  - first:
+      213: 6825215835754221160
+    second: BrickWall_Break_46
+  - first:
+      213: -6265239795099332990
+    second: BrickWall_Break_47
+  - first:
+      213: -5602106780461784354
+    second: BrickWall_Break_48
+  - first:
+      213: -1971448881292654583
+    second: BrickWall_Break_49
+  - first:
+      213: 7766452242696505174
+    second: BrickWall_Break_50
+  - first:
+      213: 2180567064673049627
+    second: BrickWall_Break_51
+  - first:
+      213: -6510694716457880728
+    second: BrickWall_Break_52
+  - first:
+      213: -5081264341195284126
+    second: BrickWall_Break_53
+  - first:
+      213: -5313043808072767730
+    second: BrickWall_Break_54
+  - first:
+      213: 1990592309570073438
+    second: BrickWall_Break_55
+  - first:
+      213: 846687502912082807
+    second: BrickWall_Break_56
+  - first:
+      213: -2387768523314192929
+    second: BrickWall_Break_57
+  - first:
+      213: -4734506504024967544
+    second: BrickWall_Break_58
+  - first:
+      213: -5140341357730166541
+    second: BrickWall_Break_59
+  - first:
+      213: -4086179480494260170
+    second: BrickWall_Break_60
+  - first:
+      213: 1320309127691267628
+    second: BrickWall_Break_61
+  - first:
+      213: 6878595209375497705
+    second: BrickWall_Break_62
+  - first:
+      213: 3113908715790191943
+    second: BrickWall_Break_63
+  - first:
+      213: 9150466231749550183
+    second: BrickWall_Break_64
+  - first:
+      213: 7914106214195210563
+    second: BrickWall_Break_65
+  - first:
+      213: -2309399200530848172
+    second: BrickWall_Break_66
+  - first:
+      213: -1188788110513783424
+    second: BrickWall_Break_67
+  - first:
+      213: -1277635382200436377
+    second: BrickWall_Break_68
+  - first:
+      213: -1870559165399120266
+    second: BrickWall_Break_69
+  - first:
+      213: 7131985309118620355
+    second: BrickWall_Break_70
+  - first:
+      213: -3555206214137485568
+    second: BrickWall_Break_71
+  - first:
+      213: -3013547620582675613
+    second: BrickWall_Break_72
+  - first:
+      213: 406189108665483644
+    second: BrickWall_Break_73
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 0
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 128
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: BrickWall_Intact
+      rect:
+        serializedVersion: 2
+        x: 16
+        y: 254
+        width: 96
+        height: 234
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e4c15c2c23ff11248adc69cd376178bd
+      internalID: -815799329
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Cracked
+      rect:
+        serializedVersion: 2
+        x: 144
+        y: 254
+        width: 96
+        height: 234
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: fa227ddff3846cf47a0bbd4ae86cabac
+      internalID: -72284543
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Rubble
+      rect:
+        serializedVersion: 2
+        x: 256
+        y: 254
+        width: 128
+        height: 45
+      alignment: 9
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 16989c58d6004984cacc3da262c26d59
+      internalID: 1651858842
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Burst_00
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 128
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 023483b408fc90f47a68292fe1c6e29f
+      internalID: -1328140091
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Burst_01
+      rect:
+        serializedVersion: 2
+        x: 128
+        y: 128
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f601103cdef1ab449a2046a6f170b052
+      internalID: -1776268596
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Burst_02
+      rect:
+        serializedVersion: 2
+        x: 256
+        y: 128
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f5c8ec37be065c24c9bdcbd9e7488d3d
+      internalID: -523834742
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Burst_03
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 275decf7a7def574097b224dea54edab
+      internalID: -2066491826
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Burst_04
+      rect:
+        serializedVersion: 2
+        x: 128
+        y: 0
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 11fe45151f595904688eb33d3fa9232e
+      internalID: 1169133825
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: BrickWall_Burst_05
+      rect:
+        serializedVersion: 2
+        x: 256
+        y: 0
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a34676086474547458d4d9f3c5246876
+      internalID: 336502769
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: d89188c367a03144cafd55d9336317a5
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      BrickWall_Burst_00: -1328140091
+      BrickWall_Burst_01: -1776268596
+      BrickWall_Burst_02: -523834742
+      BrickWall_Burst_03: -2066491826
+      BrickWall_Burst_04: 1169133825
+      BrickWall_Burst_05: 336502769
+      BrickWall_Cracked: -72284543
+      BrickWall_Intact: -815799329
+      BrickWall_Rubble: 1651858842
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

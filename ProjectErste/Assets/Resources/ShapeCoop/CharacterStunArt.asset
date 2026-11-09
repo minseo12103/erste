@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 680f3454af25b184db3fb5c6d64718d3, type: 3}
+  m_Name: CharacterStunArt
+  m_EditorClassIdentifier: Assembly-CSharp::ShapeCoop.CharacterStunArt
+  arcs:
+  - {fileID: 2083886356, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: 1200172446, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: 229159995, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: 2049833574, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: -356833953, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: 557739441, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  impacts:
+  - {fileID: -1923042416, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: -181417554, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: -1070203082, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  - {fileID: 527726022, guid: e2d49dfd052bb4548aa8083a9276008f, type: 3}
+  tint: {r: 0.55, g: 0.86, b: 1, a: 1}
+  tintStrength: 0.3
+  framesPerSecond: 12
+  outlinePulseSpeed: 8
+  impactDuration: 0.3

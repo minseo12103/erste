@@ -1,0 +1,420 @@
+fileFormatVersion: 2
+guid: e2d49dfd052bb4548aa8083a9276008f
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -4359502552363542651
+    second: WeldingArc_Sheet_0
+  - first:
+      213: 1524699781375487927
+    second: WeldingArc_Sheet_1
+  - first:
+      213: 386575669852286092
+    second: WeldingArc_Sheet_2
+  - first:
+      213: 1461956060171576894
+    second: WeldingArc_Sheet_3
+  - first:
+      213: -3729426811486237631
+    second: WeldingArc_Sheet_4
+  - first:
+      213: -3927035789661763499
+    second: WeldingArc_Sheet_5
+  - first:
+      213: 8304384978159068874
+    second: WeldingArc_Sheet_6
+  - first:
+      213: -7314459909441250680
+    second: WeldingArc_Sheet_7
+  - first:
+      213: 971930678031100307
+    second: WeldingArc_Sheet_8
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 0
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 296
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Welding_Device_Off
+      rect:
+        serializedVersion: 2
+        x: 41
+        y: 610
+        width: 238
+        height: 252
+      alignment: 9
+      pivot: {x: 0.5, y: 0.024}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 88ae2954717462a418f993ae5720a7c9
+      internalID: -2002005441
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Device_On
+      rect:
+        serializedVersion: 2
+        x: 331
+        y: 610
+        width: 238
+        height: 252
+      alignment: 9
+      pivot: {x: 0.5, y: 0.024}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8975a6710ea0f3145877cdaed76d9a33
+      internalID: -75810524
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Arc_00
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 296
+        height: 591
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b9deaf9f862c6e84aac251529f1e7574
+      internalID: 2083886356
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Arc_01
+      rect:
+        serializedVersion: 2
+        x: 296
+        y: 0
+        width: 295
+        height: 591
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5726890db638f0a438d505c03848d7a2
+      internalID: 1200172446
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Arc_02
+      rect:
+        serializedVersion: 2
+        x: 591
+        y: 0
+        width: 296
+        height: 591
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: d23f77f555ce2394e873c8cd1c10df4b
+      internalID: 229159995
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Impact_00
+      rect:
+        serializedVersion: 2
+        x: 591
+        y: 587
+        width: 296
+        height: 200
+      alignment: 9
+      pivot: {x: 0.5, y: 0.1}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 386c5829a140a9c408463bee55ec89c0
+      internalID: -1923042416
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Arc_03
+      rect:
+        serializedVersion: 2
+        x: 887
+        y: 0
+        width: 296
+        height: 591
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8c64cb6caeac3ec4a9c0409e62380ca0
+      internalID: 2049833574
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Impact_01
+      rect:
+        serializedVersion: 2
+        x: 887
+        y: 587
+        width: 296
+        height: 200
+      alignment: 9
+      pivot: {x: 0.5, y: 0.1}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: de507c6b28de6a1418c5b996893b772c
+      internalID: -181417554
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Arc_04
+      rect:
+        serializedVersion: 2
+        x: 1183
+        y: 0
+        width: 295
+        height: 591
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c5beec2acf3add140bdf5f57f7e02ac7
+      internalID: -356833953
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Impact_02
+      rect:
+        serializedVersion: 2
+        x: 1183
+        y: 587
+        width: 295
+        height: 200
+      alignment: 9
+      pivot: {x: 0.5, y: 0.1}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9c0f0fd28736bc04b8b5505fcc64cccc
+      internalID: -1070203082
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Arc_05
+      rect:
+        serializedVersion: 2
+        x: 1478
+        y: 0
+        width: 296
+        height: 591
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5ebb2781e32146444a835128a7e75a36
+      internalID: 557739441
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Welding_Impact_03
+      rect:
+        serializedVersion: 2
+        x: 1478
+        y: 587
+        width: 296
+        height: 200
+      alignment: 9
+      pivot: {x: 0.5, y: 0.1}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: d9041144da822cb4cb9efcc0ed54d4cb
+      internalID: 527726022
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 24d0fcf0fc311334ab952266cf4e1b56
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      Welding_Arc_00: 2083886356
+      Welding_Arc_01: 1200172446
+      Welding_Arc_02: 229159995
+      Welding_Arc_03: 2049833574
+      Welding_Arc_04: -356833953
+      Welding_Arc_05: 557739441
+      Welding_Device_Off: -2002005441
+      Welding_Device_On: -75810524
+      Welding_Impact_00: -1923042416
+      Welding_Impact_01: -181417554
+      Welding_Impact_02: -1070203082
+      Welding_Impact_03: 527726022
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

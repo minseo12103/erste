@@ -17,7 +17,7 @@ namespace ShapeCoop
         [Range(0f, 1f)] public float dashStopSpeedRatio = .15f;
         public float dashCooldown = 0.65f;
         public float playerMass = 1f;
-        public float ballMass = 1.2f;
+        public float ballMass = 1f;
         [Range(0f, 1f)] public float ballBounciness = .75f;
         public float gravityScale = 2f;
         [Header("Character eyes")]

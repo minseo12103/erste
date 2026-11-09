@@ -84,6 +84,12 @@ namespace ShapeCoop.Editor
             ReloadSections();
         }
         void OnDisable() { SceneView.duringSceneGui -= HandleSceneDrag; EditorApplication.projectChanged -= OnProjectChanged; EditorApplication.update -= SyncMoveSnapping; AssemblyReloadEvents.beforeAssemblyReload -= RestoreMoveSnapping; Undo.postprocessModifications -= PostprocessRectMove; CancelRectDrag(); RestoreMoveSnapping(); }
+        void OnSelectionChange() { Repaint(); }
+        void OnInspectorUpdate()
+        {
+            var selected = Selection.activeTransform;
+            if (selected != null && selected.GetComponentInParent<RotatingCranePlatforms>() != null) Repaint();
+        }
         void SyncMoveSnapping()
         {
             var section = CurrentSection();
@@ -266,6 +272,12 @@ namespace ShapeCoop.Editor
                     return;
                 }
                 EditorGUILayout.Space(); EditorGUILayout.LabelField("현재 구간", section.displayName, EditorStyles.boldLabel);
+                var selection = Selection.activeTransform;
+                var crane = selection != null ? selection.GetComponentInParent<RotatingCranePlatforms>() : null;
+                if (crane != null && crane.transform.IsChildOf(section.transform))
+                {
+                    EditorGUILayout.Space(); CraneSettingsGUI.Draw(crane); EditorGUILayout.Space();
+                }
                 if (GUILayout.Button("현재 구간을 프리팹으로 저장", GUILayout.Height(28))) ExportSection(section, true);
                 EditorGUILayout.LabelField("저장 위치", section.prefabPath, EditorStyles.wordWrappedMiniLabel);
                 EditorGUILayout.Space(); EditorGUILayout.LabelField("구간 테스트", EditorStyles.boldLabel);

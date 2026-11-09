@@ -56,7 +56,7 @@ MonoBehaviour:
   dashStopSpeedRatio: 0.15
   dashCooldown: 0.65
   playerMass: 1
-  ballMass: 1.2
+  ballMass: 1
   ballBounciness: 0.75
   gravityScale: 2
   snapshotsPerSecond: 20

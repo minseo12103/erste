@@ -26,8 +26,8 @@ Transform:
   m_GameObject: {fileID: 1767676612933900049}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 2, y: 0.5, z: 0}
+  m_LocalPosition: {x: 0, y: -0.25, z: 0}
+  m_LocalScale: {x: 2.55, y: 2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 538540281996132305}
@@ -81,8 +81,8 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 1
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: d09c740eec1490d4ab4268b05716c371, type: 3}
-  m_Color: {r: 0.8, g: 0.15, b: 0.16, a: 1}
+  m_Sprite: {fileID: 757484840, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -145,6 +145,7 @@ MonoBehaviour:
   inactiveSeconds: 2
   effectSeconds: 1.5
   impactSpeed: 8
+  sandFrames: []
   platformA: {fileID: 0}
   platformB: {fileID: 0}
   rotatingBeam: {fileID: 0}
@@ -229,7 +230,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -2.5, z: 0}
-  m_LocalScale: {x: 4, y: 5, z: 0}
+  m_LocalScale: {x: 4, y: 2.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8329627661430625244}
@@ -281,10 +282,10 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: -1
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: d09c740eec1490d4ab4268b05716c371, type: 3}
-  m_Color: {r: 0.85, g: 0.2, b: 0.4, a: 0.22}
+  m_Sprite: {fileID: -1038322585, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -302,6 +303,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8329627661430625244}
+  - component: {fileID: 4974666583661497498}
   m_Layer: 0
   m_Name: Visuals (replaceable)
   m_TagString: Untagged
@@ -325,3 +327,28 @@ Transform:
   - {fileID: 5128304401661085540}
   m_Father: {fileID: 538540281996132305}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4974666583661497498
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8937969931633724495}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88527421051a14d47935d6361a627ab3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShapeCoop.MagnetFieldVisual
+  area: {fileID: 5504367808463482801}
+  device: {fileID: 7797586560789503329}
+  field: {fileID: 5443881484518825914}
+  deviceOff: {fileID: 757484840, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  deviceOnFrames:
+  - {fileID: -1171550401, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  - {fileID: -1335279576, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  fieldFrames:
+  - {fileID: -1038322585, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  - {fileID: 1283228146, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  - {fileID: -1373189904, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  - {fileID: 1430081439, guid: 01db986189639654e8a8989e1e5d4fa3, type: 3}
+  framesPerSecond: 8

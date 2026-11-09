@@ -13,6 +13,8 @@ namespace ShapeCoop
         PrototypeSettings settings;
         Transform leftEye, rightEye;
         Transform helmetObject;
+        CharacterStunVisual stunVisual;
+        CharacterIceVisual iceVisual;
         Vector3 helmetBaseScale;
         Vector3 leftCenter, rightCenter;
         float idleCountdown;
@@ -26,14 +28,16 @@ namespace ShapeCoop
             root.transform.SetParent(owner.transform, false);
             var appearance = root.AddComponent<PrototypeCharacterAppearance>();
             appearance.player = owner; appearance.settings = config;
+            appearance.iceVisual = root.AddComponent<CharacterIceVisual>(); appearance.iceVisual.Initialize(owner);
             if (!LoadArtwork())
             {
                 Debug.LogWarning("Character artwork missing; using prototype shape.");
-                PrototypeVisuals.Shape(root.transform, shape, PrototypeVisuals.PlayerColor(owner.colorIndex));
+                var fallback = PrototypeVisuals.Shape(root.transform, shape, PrototypeVisuals.PlayerColor(owner.colorIndex));
+                appearance.stunVisual = root.AddComponent<CharacterStunVisual>(); appearance.stunVisual.Initialize(owner, fallback.transform, null, null, null);
                 return appearance;
             }
             int index = Mathf.Clamp(shape, 0, 2);
-            CreateSprite(root.transform, "Body", bodies[index], Vector2.zero, Vector2.one, 1);
+            var body = CreateSprite(root.transform, "Body", bodies[index], Vector2.zero, Vector2.one, 1);
             Vector2 eyeSize;
             if (index == 0) { appearance.leftCenter = new Vector3(-.145f, -.145f); appearance.rightCenter = new Vector3(.145f, -.145f); eyeSize = new Vector2(.135f, .16f); }
             else if (index == 1) { appearance.leftCenter = new Vector3(-.22f, .07f); appearance.rightCenter = new Vector3(.22f, .07f); eyeSize = new Vector2(.16f, .16f); }
@@ -42,6 +46,8 @@ namespace ShapeCoop
             appearance.rightEye = CreateSprite(root.transform, "Pupil Right", pupilRight, appearance.rightCenter, eyeSize, 2);
             appearance.helmetObject = CreateSprite(root.transform, "Helmet", helmet, new Vector2(0, .735f), new Vector2(1.12f, .68f), 3);
             appearance.helmetBaseScale = appearance.helmetObject.localScale;
+            appearance.stunVisual = root.AddComponent<CharacterStunVisual>();
+            appearance.stunVisual.Initialize(owner, body, appearance.helmetObject, appearance.leftEye, appearance.rightEye);
             appearance.ResetEyes(); return appearance;
         }
         public void SetHelmetLayout(Vector2 offset, float size)
@@ -82,6 +88,7 @@ namespace ShapeCoop
             if (leftEye != null) leftEye.localPosition = leftCenter;
             if (rightEye != null) rightEye.localPosition = rightCenter;
         }
+        public void ResetStatus() { if (stunVisual != null) stunVisual.Clear(); if (iceVisual != null) iceVisual.Clear(); }
         float NextDelay()
         {
             float minimum = Mathf.Max(.1f, settings.idleLookMinDelay);
@@ -90,6 +97,11 @@ namespace ShapeCoop
         void Update()
         {
             if (player == null || settings == null || leftEye == null || rightEye == null) return;
+            if (player.stunned)
+            {
+                leftEye.localPosition = leftCenter; rightEye.localPosition = rightCenter;
+                leftEyeVelocity = rightEyeVelocity = Vector3.zero; return;
+            }
             var velocity = player.AppearanceVelocity;
             bool moving = velocity.sqrMagnitude > .0144f || Mathf.Abs(player.AppearanceAngularVelocity) > 4f;
             if (player.AppearanceAuthority)
