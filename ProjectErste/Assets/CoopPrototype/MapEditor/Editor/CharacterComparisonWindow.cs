@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -14,9 +15,14 @@ namespace ShapeCoop.Editor
         Scene previewScene;
         GameObject settingsObject;
         readonly PrototypePlayer[] players = new PrototypePlayer[3];
+        readonly Sprite[] gameIce = new Sprite[3];
+        readonly Color[] gameIceColor = new Color[3];
+        Texture2D iceReviewTexture;
+        Sprite iceReviewSprite;
         Vector2 scroll;
         float pixelsPerUnit = 155;
         bool showColliders = true, showHats = true;
+        bool showIce = true, showIceReview = true;
         [SerializeField] CharacterShapeLayout[] draft;
 
         [MenuItem("Tools/Shape Coop/Character Size Comparison")]
@@ -47,7 +53,29 @@ namespace ShapeCoop.Editor
                 var appearance = player.GetComponentInChildren<PrototypeCharacterAppearance>();
                 if (appearance != null) appearance.enabled = false;
                 player.body.simulated = false; players[i] = player; player.SetCharacterLayout(draft[i]);
+                var ice = player.GetComponentInChildren<CharacterIceVisual>();
+                var iceObject = ice != null ? ice.transform.Find("Nitrogen ice (visual only)") : null;
+                var iceRenderer = iceObject != null ? iceObject.GetComponent<SpriteRenderer>() : null;
+                if (iceRenderer != null) { gameIce[i] = iceRenderer.sprite; gameIceColor[i] = iceRenderer.color; }
             }
+            LoadIceReview(); UpdatePreview();
+        }
+        void LoadIceReview()
+        {
+            string path = Path.Combine(Directory.GetParent(Application.dataPath).FullName, ".utmp", "ShapeCoop_IceReview", "IceBlock_Review.png");
+            if (!File.Exists(path)) return;
+            try
+            {
+                iceReviewTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear };
+                if (!iceReviewTexture.LoadImage(File.ReadAllBytes(path))) throw new IOException("Invalid ice preview image");
+                var pixels = iceReviewTexture.GetPixels32(); int minX = iceReviewTexture.width, minY = iceReviewTexture.height, maxX = -1, maxY = -1;
+                for (int y = 0; y < iceReviewTexture.height; y++) for (int x = 0; x < iceReviewTexture.width; x++)
+                    if (pixels[y * iceReviewTexture.width + x].a >= 20) { minX = Math.Min(minX, x); minY = Math.Min(minY, y); maxX = Math.Max(maxX, x); maxY = Math.Max(maxY, y); }
+                if (maxX < minX || maxY < minY) throw new IOException("Ice preview image is empty");
+                iceReviewSprite = Sprite.Create(iceReviewTexture, new Rect(minX, minY, maxX - minX + 1, maxY - minY + 1), new Vector2(.5f, .5f), 100);
+                iceReviewSprite.hideFlags = HideFlags.HideAndDontSave;
+            }
+            catch (Exception e) { Debug.LogWarning("Could not load the optional ice review image: " + e.Message); if (iceReviewTexture != null) DestroyImmediate(iceReviewTexture); iceReviewTexture = null; }
         }
         public void LoadApplied()
         {
@@ -59,7 +87,20 @@ namespace ShapeCoop.Editor
         void UpdatePreview()
         {
             if (draft == null || draft.Length != 3) return;
-            for (int i = 0; i < players.Length; i++) if (players[i] != null) players[i].SetCharacterLayout(draft[i]);
+            for (int i = 0; i < players.Length; i++)
+            {
+                if (players[i] == null) continue;
+                players[i].SetCharacterLayout(draft[i]);
+                var ice = players[i].GetComponentInChildren<CharacterIceVisual>();
+                var iceObject = ice != null ? ice.transform.Find("Nitrogen ice (visual only)") : null;
+                var renderer = iceObject != null ? iceObject.GetComponent<SpriteRenderer>() : null;
+                if (renderer != null)
+                {
+                    bool review = showIceReview && iceReviewSprite != null;
+                    renderer.sprite = review ? iceReviewSprite : gameIce[i]; renderer.color = review ? Color.white : gameIceColor[i];
+                    ice.RefreshSize();
+                }
+            }
             Repaint();
         }
         public static bool SaveLayout(string path, CharacterShapeLayout[] values)
@@ -77,9 +118,11 @@ namespace ShapeCoop.Editor
         }
         void DisposePreview()
         {
-            for (int i = 0; i < players.Length; i++) { if (players[i] != null) DestroyImmediate(players[i].gameObject); players[i] = null; }
+            for (int i = 0; i < players.Length; i++) { if (players[i] != null) DestroyImmediate(players[i].gameObject); players[i] = null; gameIce[i] = null; }
             if (settingsObject != null) DestroyImmediate(settingsObject); settingsObject = null;
             if (previewScene.IsValid()) EditorSceneManager.ClosePreviewScene(previewScene);
+            if (iceReviewSprite != null) DestroyImmediate(iceReviewSprite); iceReviewSprite = null;
+            if (iceReviewTexture != null) DestroyImmediate(iceReviewTexture); iceReviewTexture = null;
             previewScene = default;
         }
         void OnGUI()
@@ -100,13 +143,22 @@ namespace ShapeCoop.Editor
                 if (GUILayout.Button("적용된 값 불러오기", GUILayout.Height(26))) LoadApplied();
                 if (GUILayout.Button("기본값 미리보기", GUILayout.Height(26))) { for (int i = 0; i < draft.Length; i++) draft[i] = CharacterShapeLayout.Default; UpdatePreview(); }
             }
-            EditorGUILayout.LabelField("수정 내용은 게임에 적용을 누르기 전까지 미리보기입니다.", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("게임에 적용은 캐릭터 크기와 모자 설정을 저장합니다. 얼음 시안은 적용하지 않습니다.", EditorStyles.wordWrappedMiniLabel);
             using (new EditorGUILayout.HorizontalScope())
             {
                 showColliders = EditorGUILayout.ToggleLeft("충돌체 표시", showColliders, GUILayout.Width(100));
                 showHats = EditorGUILayout.ToggleLeft("모자 표시", showHats, GUILayout.Width(85));
                 pixelsPerUnit = EditorGUILayout.Slider("확대", pixelsPerUnit, 80, 230);
             }
+            EditorGUI.BeginChangeCheck();
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                showIce = EditorGUILayout.ToggleLeft("얼음 표시", showIce, GUILayout.Width(100));
+                using (new EditorGUI.DisabledScope(iceReviewSprite == null)) showIceReview = EditorGUILayout.ToggleLeft("새 얼음 시안 (게임 미적용)", showIceReview);
+            }
+            if (EditorGUI.EndChangeCheck()) UpdatePreview();
+            if (showIce && iceReviewSprite != null) EditorGUILayout.LabelField(showIceReview ? "새 시안 미리보기: 게임에는 아직 적용되지 않았습니다." : "현재 게임에 적용된 얼음 이미지입니다.", EditorStyles.wordWrappedMiniLabel);
+            else if (showIce) EditorGUILayout.LabelField("시안 파일이 없어 현재 게임의 얼음 이미지만 표시합니다.", EditorStyles.wordWrappedMiniLabel);
             scroll = EditorGUILayout.BeginScrollView(scroll, false, false);
             float maxHalfWidth = .5f, maxHeight = 0;
             for (int i = 0; i < draft.Length; i++)
@@ -125,7 +177,7 @@ namespace ShapeCoop.Editor
             for (int i = 0; i < players.Length; i++)
             {
                 float x = canvas.x + canvas.width * (i + .5f) / 3f;
-                DrawCharacter(players[i], x, baseline, pixelsPerUnit, showHats);
+                DrawCharacter(players[i], x, baseline, pixelsPerUnit, showHats, showIce);
                 if (showColliders) DrawCollider(players[i].shapeCollider, x, baseline, pixelsPerUnit);
                 var label = new GUIStyle(EditorStyles.centeredGreyMiniLabel) { normal = { textColor = Color.white }, fontSize = 12 };
                 GUI.Label(new Rect(x - 100, baseline + 12, 200, 22), Names[i] + "   " + ColliderSize(players[i].shapeCollider, draft[i].size), label);
@@ -153,14 +205,14 @@ namespace ShapeCoop.Editor
             EditorGUILayout.HelpBox("크기는 몸체 그림과 충돌체에 함께 적용됩니다. 모자 크기와 위치는 해당 몸체 크기 기준이며, 모자에는 충돌이 없습니다.", MessageType.None);
             EditorGUILayout.EndScrollView();
         }
-        static void DrawCharacter(PrototypePlayer player, float x, float baseline, float scale, bool hats)
+        static void DrawCharacter(PrototypePlayer player, float x, float baseline, float scale, bool hats, bool ice)
         {
             if (player == null) return;
             var renderers = player.GetComponentsInChildren<SpriteRenderer>(true);
             Array.Sort(renderers, (a,b) => a.sortingOrder.CompareTo(b.sortingOrder));
             foreach (var renderer in renderers)
             {
-                if (renderer.sprite == null || (!hats && renderer.gameObject.name == "Helmet")) continue;
+                if (!ShouldDrawRenderer(renderer, hats, ice)) continue;
                 var local = renderer.transform.position - player.transform.position;
                 var size = Vector3.Scale(renderer.sprite.bounds.size, renderer.transform.lossyScale);
                 var rect = new Rect(x + (local.x - size.x * .5f) * scale, baseline - (local.y + player.CurrentCharacterLayout.size * .5f + size.y * .5f) * scale, size.x * scale, size.y * scale);
@@ -168,6 +220,11 @@ namespace ShapeCoop.Editor
                 var uv = new Rect(source.x / texture.width, source.y / texture.height, source.width / texture.width, source.height / texture.height);
                 var color = GUI.color; GUI.color = renderer.color; GUI.DrawTextureWithTexCoords(rect, texture, uv, true); GUI.color = color;
             }
+        }
+        static bool ShouldDrawRenderer(SpriteRenderer renderer, bool hats, bool ice)
+        {
+            if (renderer == null || renderer.sprite == null || (!hats && renderer.gameObject.name == "Helmet")) return false;
+            return renderer.gameObject.name == "Nitrogen ice (visual only)" ? ice : renderer.enabled;
         }
         static string ColliderSize(Collider2D collider, float sizeFactor)
         {

@@ -52,6 +52,7 @@ namespace ShapeCoop
         }
         public void SetHelmetLayout(Vector2 offset, float size)
         {
+            if (iceVisual != null) iceVisual.RefreshSize();
             if (helmetObject == null) return;
             helmetObject.localPosition = new Vector3(offset.x, .735f + offset.y, 0);
             helmetObject.localScale = new Vector3(helmetBaseScale.x * size, helmetBaseScale.y * size, helmetBaseScale.z);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEditor;
@@ -77,8 +78,19 @@ namespace ShapeCoop.Editor
                 var test = Object.FindFirstObjectByType<MapTestRunner>();
                 Check(test != null && test.testStart != null, "new section should have a test start");
                 test.testStart.transform.localPosition = new Vector3(0,.55f,0);
+                var originalTestMarker = test.testStart; test.testStart = null;
+                Check(test.ResolveStart() == originalTestMarker, "automatic mode must fall back to the test marker"); test.testStart = originalTestMarker;
                 Place(first, "Terrain_Box", new Vector2(0,-.5f), new Vector2(20,1));
-                Place(first, "Marker_PlayerStart", new Vector2(-3,.6f), Vector2.one);
+                var gameStart = Place(first, "Marker_PlayerStart", new Vector2(-3,.6f), Vector2.one).GetComponent<MapMarker>();
+                Check(test.ResolveStart() == gameStart, "automatic test must use the player start when present");
+                var duplicateStart = Place(first, "Marker_PlayerStart", new Vector2(-5,.6f), Vector2.one);
+                Check(MapValidation.Section(first).warnings.Exists(message => message.Contains("플레이어 시작점이 여러 개")), "duplicate player starts must warn");
+                Object.DestroyImmediate(duplicateStart);
+                test.startMode = MapTestStartMode.SelectedMarker;
+                Check(test.ResolveStart() == test.testStart, "explicit test start must remain available");
+                var outside = new GameObject("outside marker").AddComponent<MapMarker>(); test.testStart = outside;
+                Check(test.ResolveStart() == null, "a marker outside the section must not be used for testing"); Object.DestroyImmediate(outside.gameObject); test.testStart = originalTestMarker;
+                test.startMode = MapTestStartMode.Automatic;
                 Place(first, "Marker_BallStart", new Vector2(-1,.6f), Vector2.one);
                 Place(first, "Goal_Area", new Vector2(5,1), new Vector2(2,2));
                 Place(first, "Connector_Exit", new Vector2(9,0), Vector2.one);
@@ -150,7 +162,7 @@ namespace ShapeCoop.Editor
                 var camera = Object.FindFirstObjectByType<Camera>();
                 if (camera != null) camera.enabled = false;
             }
-            test.shape = (MapTestShape)next; EditorSceneManager.MarkSceneDirty(test.gameObject.scene); EditorSceneManager.SaveScene(test.gameObject.scene);
+            test.shape = (MapTestShape)next; test.startMode = MapTestStartMode.SelectedMarker; EditorSceneManager.MarkSceneDirty(test.gameObject.scene); EditorSceneManager.SaveScene(test.gameObject.scene);
             EditorApplication.delayCall += EditorApplication.EnterPlaymode;
         }
         static void OnUpdate()
@@ -165,7 +177,9 @@ namespace ShapeCoop.Editor
                 if (phase == 1)
                 {
                     Check(player.shape == Int("shape") && player.body.simulated && player.body.bodyType == RigidbodyType2D.Dynamic, "selected shape or physics incorrect");
-                    Check(Vector2.Distance(player.spawn, test.testStart.transform.position) < .01f, "test start position ignored");
+                    var expectedStart = test.ResolveStart();
+                    Check(expectedStart != null && Vector2.Distance(player.spawn, expectedStart.transform.position) < .01f, "resolved test start position ignored");
+                    Check(Int("shape") == 0 ? expectedStart.kind == MapMarkerKind.PlayerStart : expectedStart == test.testStart, "wrong automatic or explicit test start");
                     Check(Vector2.Distance(Field<Vector2>(test, "ballSpawn"), test.customBallStart) < .01f, "custom ball test start ignored");
                     var camera = Field<Camera>(test, "testCamera");
                     Check(camera != null && camera.isActiveAndEnabled && camera.targetTexture == null, "test camera missing or not rendering");
@@ -189,9 +203,31 @@ namespace ShapeCoop.Editor
                 var placements = new[] { new MapSectionPlacement { prefab = a, position = new Vector2(10,0) }, new MapSectionPlacement { prefab = b, position = new Vector2(25,0) } };
                 bool assembled = MapSectionAssembler.Build(placements, root.transform, null, out var playerStart, out var ballStart);
                 Check(assembled && root.transform.childCount == 2 && playerStart.HasValue && ballStart.HasValue && Vector2.Distance(playerStart.Value, new Vector2(7,.6f)) < .01f && Vector2.Distance(ballStart.Value, new Vector2(9,.6f)) < .01f, "composed sections or spawn marker offsets incorrect");
+                if (Int("shape") == 0) VerifyGameSpawns(placements, playerStart.Value);
                 Object.Destroy(root); Debug.Log("SHAPE_MAP_TEST_SHAPE_OK: " + (MapTestShape)Int("shape")); Int("phase", 0); EditorApplication.ExitPlaymode();
             }
             catch (Exception e) { Debug.LogException(e); Set("error", e.ToString()); Int("phase", 0); EditorApplication.ExitPlaymode(); }
+        }
+        static void VerifyGameSpawns(MapSectionPlacement[] placements, Vector2 expectedStart)
+        {
+            var system = new GameObject("game start verification"); system.SetActive(false);
+            var game = system.AddComponent<PrototypeGame>(); game.mapSections = placements;
+            typeof(PrototypeGame).GetField("settings", Private).SetValue(game, system.GetComponent<PrototypeSettings>());
+            typeof(PrototypeGame).GetField("session", Private).SetValue(game, system.GetComponent<SteamSession>());
+            var players = new PlayerData[3];
+            for (int i = 0; i < players.Length; i++) players[i] = new PlayerData { id = i.ToString(), name = "test", shape = i, hasCharacterLayout = true, characterSize = 1, helmetSize = 1 };
+            typeof(PrototypeGame).GetMethod("BuildWorld", Private).Invoke(game, new object[] { players, true });
+            var spawned = Field<Dictionary<string, PrototypePlayer>>(game, "players");
+            for (int i = 0; i < players.Length; i++)
+            {
+                var player = spawned[i.ToString()]; var expected = expectedStart + Vector2.right * (i * 1.25f);
+                Check(Vector2.Distance(player.spawn, expected) < .01f && Vector2.Distance(player.body.position, expected) < .01f, "game ignored player start for slot " + i);
+                player.body.position += Vector2.up * 5;
+            }
+            typeof(PrototypeGame).GetMethod("ResetPositions", Private).Invoke(game, null);
+            for (int i = 0; i < players.Length; i++) Check(Vector2.Distance(spawned[i.ToString()].body.position, spawned[i.ToString()].spawn) < .01f, "game restart ignored player start");
+            var world = Field<GameObject>(game, "world"); if (world != null) Object.DestroyImmediate(world);
+            Object.DestroyImmediate(system); Debug.Log("SHAPE_GAME_PLAYER_START_OK");
         }
         static void Finish(bool success)
         {

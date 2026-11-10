@@ -283,29 +283,41 @@ namespace ShapeCoop.Editor
                 EditorGUILayout.Space(); EditorGUILayout.LabelField("구간 테스트", EditorStyles.boldLabel);
                 EditorGUI.BeginChangeCheck();
                 var shape = (MapTestShape)EditorGUILayout.EnumPopup("도형", test.shape);
-                var marker = (MapMarker)EditorGUILayout.ObjectField("테스트 시작 지점", test.testStart, typeof(MapMarker), true);
                 bool near = EditorGUILayout.Toggle("테스트 위치에 공 생성", test.spawnBallNearTestStart);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    Undo.RecordObject(test, "Change map test settings"); test.shape = shape; test.testStart = marker; test.spawnBallNearTestStart = near;
+                    Undo.RecordObject(test, "Change map test settings"); test.shape = shape; test.spawnBallNearTestStart = near;
                     EditorUtility.SetDirty(test); EditorSceneManager.MarkSceneDirty(test.gameObject.scene);
                 }
+                EditorGUI.BeginChangeCheck();
+                int mode = GUILayout.Toolbar((int)test.startMode, new[] { "자동: 플레이어 시작 우선", "별도 테스트 시작" });
+                if (EditorGUI.EndChangeCheck())
+                { Undo.RecordObject(test, "Change test start mode"); test.startMode = (MapTestStartMode)mode; EditorUtility.SetDirty(test); EditorSceneManager.MarkSceneDirty(test.gameObject.scene); }
+                EditorGUI.BeginChangeCheck();
+                var marker = (MapMarker)EditorGUILayout.ObjectField("별도 테스트 마커", test.testStart, typeof(MapMarker), true);
+                if (EditorGUI.EndChangeCheck())
+                { Undo.RecordObject(test, "Set test start"); test.testStart = marker; test.startMode = MapTestStartMode.SelectedMarker; EditorUtility.SetDirty(test); EditorSceneManager.MarkSceneDirty(test.gameObject.scene); }
+                var resolvedStart = test.ResolveStart();
+                using (new EditorGUI.DisabledScope(true)) EditorGUILayout.ObjectField("실제 테스트 시작", resolvedStart, typeof(MapMarker), true);
+                if (resolvedStart != null) EditorGUILayout.LabelField("시작 좌표", ((Vector2)resolvedStart.transform.position).ToString("F2"));
+                else EditorGUILayout.HelpBox("현재 구간의 시작 마커를 지정하세요.", MessageType.Warning);
+                EditorGUILayout.HelpBox("자동 모드는 플레이어 시작이 있으면 그 위치를 사용합니다. 원하는 구간을 따로 시험하려면 별도 테스트 시작을 선택하세요. 실제 게임에는 구간 프리팹을 저장하고 맵 조합을 게임에 적용해야 합니다.", MessageType.None);
                 if (GUILayout.Button("선택한 마커를 테스트 시작으로"))
                 {
                     var selected = Selection.activeGameObject == null ? null : Selection.activeGameObject.GetComponent<MapMarker>();
                     if (selected != null && selected.transform.IsChildOf(section.transform))
-                    { Undo.RecordObject(test, "Set test start"); test.testStart = selected; EditorSceneManager.MarkSceneDirty(test.gameObject.scene); }
+                    { Undo.RecordObject(test, "Set test start"); test.testStart = selected; test.startMode = MapTestStartMode.SelectedMarker; EditorUtility.SetDirty(test); EditorSceneManager.MarkSceneDirty(test.gameObject.scene); }
                     else ShowNotification(new GUIContent("이 구간의 시작 마커를 선택하세요"));
                 }
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button("플레이어 위치 클릭 지정")) { sceneTool = SceneTool.PlayerStart; previewPrefab = null; SceneView.RepaintAll(); }
+                    if (GUILayout.Button("테스트 위치 클릭 지정")) { sceneTool = SceneTool.PlayerStart; previewPrefab = null; SceneView.RepaintAll(); }
                     if (GUILayout.Button("공 위치 클릭 지정")) { sceneTool = SceneTool.BallStart; previewPrefab = null; SceneView.RepaintAll(); }
                 }
                 if (!test.spawnBallNearTestStart && test.useCustomBallStart) EditorGUILayout.LabelField("테스트 공 시작", test.customBallStart.ToString("F2"));
                 if (GUILayout.Button("선택 도형으로 테스트 실행", GUILayout.Height(28)))
                 {
-                    if (test.testStart == null || !test.testStart.transform.IsChildOf(section.transform)) EditorUtility.DisplayDialog("테스트 시작 지점", "현재 구간의 시작 마커를 지정하세요.", "확인");
+                    if (test.ResolveStart() == null) EditorUtility.DisplayDialog("테스트 시작 지점", "현재 구간의 시작 마커를 지정하세요.", "확인");
                     else if (EditorSceneManager.SaveScene(section.gameObject.scene)) EditorApplication.EnterPlaymode();
                 }
                 EditorGUILayout.Space(); EditorGUILayout.LabelField("배치 팔레트", EditorStyles.boldLabel);
@@ -383,6 +395,7 @@ namespace ShapeCoop.Editor
                     var test = CurrentTest();
                     if (test != null && sceneTool == SceneTool.PlayerStart)
                     {
+                        Undo.RecordObject(test, "Use custom test start"); test.startMode = MapTestStartMode.SelectedMarker; EditorUtility.SetDirty(test);
                         if (test.testStart == null || test.testStart.kind != MapMarkerKind.TestStart || !test.testStart.transform.IsChildOf(section.transform))
                         {
                             var markerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(MapEditorInstaller.PalettePath + "/Marker_TestStart.prefab");

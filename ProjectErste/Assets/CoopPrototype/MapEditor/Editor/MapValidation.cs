@@ -39,6 +39,9 @@ namespace ShapeCoop.Editor
                 if (go.GetComponent<Renderer>() != null && go.GetComponentInParent<MapMarker>() == null && go.GetComponentInParent<MapConnector>() == null && go.GetComponentInChildren<Collider2D>(true) == null)
                     result.warnings.Add(go.name + ": 2D 충돌체가 없습니다. 배경 등 장식이라면 괜찮습니다.");
             }
+            int playerStarts = 0;
+            foreach (var marker in section.GetComponentsInChildren<MapMarker>(true)) if (marker.kind == MapMarkerKind.PlayerStart) playerStarts++;
+            if (playerStarts > 1) result.warnings.Add("플레이어 시작점이 여러 개입니다. 자동 테스트와 게임은 첫 번째만 사용합니다.");
             return result;
         }
         public static MapValidationResult Assembly(MapAssemblyDraft draft)

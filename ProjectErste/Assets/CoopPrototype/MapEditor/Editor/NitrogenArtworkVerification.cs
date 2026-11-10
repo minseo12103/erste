@@ -95,7 +95,17 @@ namespace ShapeCoop.Editor
                 Check(player.frozen && !player.forcedFrozen && !Ice(player).enabled, "thaw did not preserve manual hold");
                 player.ForceFreeze(1); player.ResetBody(); client.Apply(player.Capture(), true); host.ResetGimmick(); remote.Apply(host.Capture(0), true);
                 Check(!Ice(player).enabled && !Ice(client).enabled && image.gas.sprite == null && other.gas.sprite == null, "restart did not reset nitrogen or player ice");
-                for (int shape = 0; shape < 3; shape++) { var position = new Vector2((shape - 1) * 1.6f, 8); var p = Player(settings, shape, position, true); p.body.interpolation = RigidbodyInterpolation2D.None; p.transform.position = position; p.ForceFreeze(1); Check(Ice(p).enabled && p.GetComponentsInChildren<Collider2D>(true).Length == 1, "ice missing or collidable on a character shape"); }
+                for (int shape = 0; shape < 3; shape++)
+                {
+                    var position = new Vector2((shape - 1) * 1.8f, 8); var p = Player(settings, shape, position, true);
+                    p.SetCharacterLayout(new CharacterShapeLayout { size = shape == 0 ? 1.2f : 1f, helmetSize = 1 });
+                    p.body.interpolation = RigidbodyInterpolation2D.None; p.transform.position = position; p.ForceFreeze(1);
+                    var frozen = Ice(p); var spriteSize = frozen.sprite.bounds.size; var visualScale = frozen.transform.lossyScale;
+                    Check(frozen.enabled && p.GetComponentsInChildren<Collider2D>(true).Length == 1, "ice missing or collidable on a character shape");
+                    Check(Mathf.Abs(spriteSize.x * visualScale.x - 1.62f) < .001f && Mathf.Abs(spriteSize.y * visualScale.y - 1.62f) < .001f, "ice world size differs between character shapes");
+                    p.SetCharacterLayout(new CharacterShapeLayout { size = .8f, helmetSize = 1 }); visualScale = frozen.transform.lossyScale;
+                    Check(Mathf.Abs(spriteSize.x * visualScale.x - 1.62f) < .001f && Mathf.Abs(spriteSize.y * visualScale.y - 1.62f) < .001f, "ice size changed with character layout");
+                }
                 Physics2D.SyncTransforms();
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-nitrogenCapture") >= 0) Capture("characters", 0, 8, 2.4f);
                 Physics2D.simulationMode = mode; SessionState.SetBool(Key, false); Debug.Log("SHAPE_NITROGEN_VERIFICATION_OK"); EditorApplication.Exit(0);

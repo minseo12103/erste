@@ -7,6 +7,8 @@ namespace ShapeCoop
     public sealed class CharacterIceVisual : MonoBehaviour
     {
         const string Sheet = "ShapeCoop/Effects/NitrogenGeyser_Sheet";
+        // 1.35 local units at the current 1.2-unit triangle size.
+        const float IceWorldSize = 1.62f;
         static Sprite ice;
         PrototypePlayer player;
         SpriteRenderer image;
@@ -18,9 +20,16 @@ namespace ShapeCoop
             if (ice == null) return;
             var obj = new GameObject("Nitrogen ice (visual only)"); obj.transform.SetParent(transform, false);
             image = obj.AddComponent<SpriteRenderer>(); image.sprite = ice; image.sortingOrder = 0; image.color = new Color(1, 1, 1, .85f); image.enabled = false;
-            var size = ice.bounds.size; obj.transform.localScale = new Vector3(1.35f / size.x, 1.35f / size.y, 1);
+            RefreshSize();
+        }
+        public void RefreshSize()
+        {
+            if (image == null || image.sprite == null) return;
+            var size = image.sprite.bounds.size; var parentScale = image.transform.parent.lossyScale;
+            if (size.x <= 0 || size.y <= 0) return;
+            image.transform.localScale = new Vector3(IceWorldSize / (size.x * Mathf.Max(.0001f, Mathf.Abs(parentScale.x))), IceWorldSize / (size.y * Mathf.Max(.0001f, Mathf.Abs(parentScale.y))), 1);
         }
         public void Clear() { if (image != null) image.enabled = false; }
-        void LateUpdate() { if (image != null) image.enabled = player != null && player.forcedFrozen; }
+        void LateUpdate() { if (image != null) { RefreshSize(); image.enabled = player != null && player.forcedFrozen; } }
     }
 }

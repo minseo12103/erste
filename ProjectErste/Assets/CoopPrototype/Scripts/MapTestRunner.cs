@@ -4,12 +4,14 @@ using UnityEngine.InputSystem;
 namespace ShapeCoop
 {
     public enum MapTestShape { Triangle, Square, Circle }
+    public enum MapTestStartMode { Automatic, SelectedMarker }
 
     // Lives in an authoring scene, never inside the exported section prefab.
     public sealed class MapTestRunner : MonoBehaviour
     {
         public MapSection section;
         public MapMarker testStart;
+        public MapTestStartMode startMode;
         public MapTestShape shape;
         public PrototypeSettings settingsSource;
         public bool spawnBallNearTestStart = true;
@@ -34,7 +36,8 @@ namespace ShapeCoop
             foreach (var gimmick in gimmicks) gimmick.Initialize(true);
             var config = gameObject.AddComponent<PrototypeSettings>();
             if (settingsSource != null) JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(settingsSource), config);
-            var marker = testStart != null ? testStart : FindMarker(MapMarkerKind.TestStart);
+            var marker = ResolveStart();
+            if (marker == null) Debug.LogWarning("Map test: no valid start marker; using the section origin.");
             Vector2 spawn = marker != null ? (Vector2)marker.transform.position : (Vector2)section.transform.position;
             testCamera = FindTestCamera();
             if (testCamera == null)
@@ -79,8 +82,16 @@ namespace ShapeCoop
         }
         MapMarker FindMarker(MapMarkerKind kind)
         {
+            if (section == null) return null;
             foreach (var marker in section.GetComponentsInChildren<MapMarker>(true)) if (marker.kind == kind) return marker;
             return null;
+        }
+        public MapMarker ResolveStart()
+        {
+            if (section == null) return null;
+            bool validSelection = testStart != null && testStart.transform.IsChildOf(section.transform);
+            if (startMode == MapTestStartMode.SelectedMarker) return validSelection ? testStart : null;
+            return FindMarker(MapMarkerKind.PlayerStart) ?? (validSelection ? testStart : FindMarker(MapMarkerKind.TestStart));
         }
         void CheckGoal(Collider2D other) { if (ball != null && other.gameObject == ball.gameObject) complete = true; }
         public void ResetTest()
