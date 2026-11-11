@@ -313,6 +313,104 @@ namespace ShapeCoop.Editor
             visual.streamFrames = streams; visual.splashFrames = splashes; visual.splitFrames = splits; visual.splash = splashRenderer; visual.split = splitRenderer;
             return true;
         }
+        static Transform CollisionPart(Transform parent, string name)
+        {
+            var part = parent.Find(name);
+            if (part == null) { part = new GameObject(name).transform; part.SetParent(parent, false); }
+            return part;
+        }
+        static void BodyBox(Transform parent, string name, Vector2 center, Vector2 size, float angle = 0)
+        {
+            var part = CollisionPart(parent, name); part.localPosition = center; part.localRotation = Quaternion.Euler(0, 0, angle); part.localScale = Vector3.one;
+            var box = part.GetComponent<BoxCollider2D>(); if (box == null) box = part.gameObject.AddComponent<BoxCollider2D>();
+            box.isTrigger = false; box.offset = Vector2.zero; box.size = size;
+        }
+        static void BodyCircle(Transform parent, string name, Vector2 center, float radius)
+        {
+            var part = CollisionPart(parent, name); part.localPosition = center; part.localRotation = Quaternion.identity; part.localScale = Vector3.one;
+            var circle = part.GetComponent<CircleCollider2D>(); if (circle == null) circle = part.gameObject.AddComponent<CircleCollider2D>();
+            circle.isTrigger = false; circle.offset = Vector2.zero; circle.radius = radius;
+        }
+        // Physical housings are separate from the replaceable artwork and effect triggers.
+        public static bool ApplyBodyCollisions(GameObject root)
+        {
+            var g = root != null ? root.GetComponent<MapGimmick>() : null; if (g == null || g.visual == null) return false;
+            if (g.kind == MapGimmickKind.Oil || g.kind == MapGimmickKind.Sand || g.kind == MapGimmickKind.Cement || g.kind == MapGimmickKind.BrickWall || g.kind == MapGimmickKind.Seesaw) return true;
+            var body = CollisionPart(root.transform, "Body colliders (physics)"); body.localPosition = Vector3.zero; body.localRotation = Quaternion.identity; body.localScale = Vector3.one;
+            switch (g.kind)
+            {
+                case MapGimmickKind.Vent:
+                    var vent = g.visual.Find("Vent"); var ventSprite = vent != null ? vent.GetComponent<SpriteRenderer>()?.sprite : null;
+                    if (ventSprite != null && ventSprite.name == "Vent_Floor") BodyBox(body, "Vent housing", new Vector2(0, -.32f), new Vector2(1.98f, .64f));
+                    else BodyBox(body, "Vent housing", Vector2.zero, new Vector2(2, .3f));
+                    break;
+                case MapGimmickKind.Pulley:
+                    if (g.visual.Find("Right wheel") != null)
+                    {
+                        for (int i = 0; i < 2; i++)
+                        {
+                            float side = i == 0 ? -1 : 1, x = side * 1.147f;
+                            BodyCircle(body, "Pulley wheel " + i, new Vector2(x + side * .054f, 2.84f), .30f);
+                            BodyBox(body, "Pulley mount " + i, new Vector2(x, 3.35f), new Vector2(.64f, .10f));
+                            BodyBox(body, "Pulley bracket " + i, new Vector2(x, 3.10f), new Vector2(.10f, .42f));
+                        }
+                    }
+                    else BodyBox(body, "Pulley housing", new Vector2(0, 2.5f), new Vector2(3.4f, .2f));
+                    break;
+                case MapGimmickKind.Sparks:
+                    var welder = g.visual.Find("Welder"); var weldSprite = welder != null ? welder.GetComponent<SpriteRenderer>()?.sprite : null;
+                    if (weldSprite != null && weldSprite.name.StartsWith("Welding_Device_", System.StringComparison.Ordinal))
+                    { BodyBox(body, "Welder housing", new Vector2(0, .52f), new Vector2(.73f, .56f)); BodyBox(body, "Welder nozzle", new Vector2(0, .13f), new Vector2(.22f, .26f)); }
+                    else BodyBox(body, "Welder housing", Vector2.zero, new Vector2(1, .4f));
+                    break;
+                case MapGimmickKind.Sprinkler:
+                    var pipe = g.visual.Find("Pipe"); var pipeSprite = pipe != null ? pipe.GetComponent<SpriteRenderer>()?.sprite : null;
+                    if (pipeSprite != null && pipeSprite.name == "WaterBarrier_Pipe") BodyBox(body, "Water pipe", new Vector2(0, .50f), new Vector2(1.96f, 1));
+                    else BodyBox(body, "Water pipe", Vector2.zero, new Vector2(2, .4f));
+                    break;
+                case MapGimmickKind.Magnet:
+                    var magnet = root.transform.Find("Magnet body"); var magnetSprite = magnet != null ? magnet.GetComponent<SpriteRenderer>()?.sprite : null;
+                    if (magnetSprite != null && magnetSprite.name.StartsWith("Magnet_Device_", System.StringComparison.Ordinal))
+                    { BodyBox(body, "Magnet housing", new Vector2(0, .30f), new Vector2(1.8f, 1.05f)); BodyBox(body, "Magnet mount", new Vector2(0, 1.03f), new Vector2(.62f, .42f)); }
+                    else BodyBox(body, "Magnet housing", Vector2.zero, new Vector2(2, .5f));
+                    break;
+                case MapGimmickKind.Nitrogen:
+                    var nitrogen = root.transform.Find("Pipe"); var nitrogenSprite = nitrogen != null ? nitrogen.GetComponent<SpriteRenderer>()?.sprite : null;
+                    if (nitrogenSprite != null && nitrogenSprite.name == "Nitrogen_Pipe")
+                    {
+                        BodyBox(body, "Nitrogen pipe horizontal", new Vector2(-1.1f, -.65f), new Vector2(1.95f, .54f));
+                        BodyBox(body, "Nitrogen pipe vertical", new Vector2(.03f, -.25f), new Vector2(.62f, 1));
+                        BodyBox(body, "Nitrogen valve", new Vector2(-.62f, -.17f), new Vector2(.48f, .20f));
+                    }
+                    else BodyBox(body, "Nitrogen pipe", Vector2.zero, new Vector2(1, .4f));
+                    break;
+                case MapGimmickKind.Crane:
+                    BodyBox(body, "Tower foot", new Vector2(0, -1.86f), new Vector2(1.12f, .19f));
+                    BodyBox(body, "Tower left leg", new Vector2(-.28f, -.90f), new Vector2(.14f, 1.8f), -11);
+                    BodyBox(body, "Tower right leg", new Vector2(.28f, -.90f), new Vector2(.14f, 1.8f), 11);
+                    BodyBox(body, "Tower crossbar", new Vector2(0, -1.03f), new Vector2(.62f, .10f));
+                    if (g.rotatingBeam != null)
+                    {
+                        var hub = g.rotatingBeam.transform; var gear = hub.Find("Center gear");
+                        if (gear != null) BodyCircle(gear, "Gear collision", Vector2.zero, .52f);
+                        foreach (string name in new[] { "Visual", "Spoke 60", "Spoke 120" })
+                        {
+                            var spoke = hub.Find(name); if (spoke != null) BodyBox(spoke, "Spoke collision", Vector2.zero, new Vector2(4.52f, .23f));
+                        }
+                        var wheel = root.GetComponent<RotatingCranePlatforms>();
+                        if (wheel != null && wheel.platforms != null) foreach (var platform in wheel.platforms)
+                        {
+                            var art = platform != null ? platform.transform.Find("Platform art") : null; if (art == null) continue;
+                            BodyBox(art, "Hanger left collision", new Vector2(-.20f, -.355f), new Vector2(.50f, .07f), -38);
+                            BodyBox(art, "Hanger right collision", new Vector2(.20f, -.355f), new Vector2(.50f, .07f), 38);
+                        }
+                        if (wheel != null) wheel.RefreshGeometry();
+                    }
+                    break;
+                default: return false;
+            }
+            return true;
+        }
         static void Create(MapGimmickKind kind, string name)
         {
             string path = Folder + "/" + name + ".prefab"; if (File.Exists(path)) return;
@@ -401,6 +499,7 @@ namespace ShapeCoop.Editor
                     gimmick.rotatingBeam = beam;
                     break;
             }
+            ApplyBodyCollisions(root);
             PrefabUtility.SaveAsPrefabAsset(root, path); Object.DestroyImmediate(root);
         }
     }

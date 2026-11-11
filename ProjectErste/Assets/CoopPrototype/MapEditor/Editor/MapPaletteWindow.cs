@@ -8,13 +8,70 @@ namespace ShapeCoop.Editor
 {
     public sealed class MapPaletteWindow : EditorWindow
     {
+        const int FavoriteSlotCount = 5;
+        static readonly GUIContent AddFavorite = new GUIContent("☆", "즐겨찾기에 추가");
+        static readonly GUIContent RemoveFavorite = new GUIContent("★", "즐겨찾기에서 해제");
+        static string[] favoriteGuids;
+
         readonly List<MapEditorWindow.PaletteItem> items = new List<MapEditorWindow.PaletteItem>();
+        readonly MapEditorWindow.PaletteItem[] favorites = new MapEditorWindow.PaletteItem[FavoriteSlotCount];
         readonly List<string> folders = new List<string>();
         readonly List<string> tags = new List<string>();
         string search = "", customTag = "";
         int folderIndex, tagIndex;
         Vector2 scroll, tagScroll, dragStart;
         GameObject selected, dragged;
+
+        static string FavoritesKey => "ShapeCoop.MapPaletteFavorites." + Hash128.Compute(Application.dataPath);
+
+        static string[] FavoriteGuids
+        {
+            get
+            {
+                if (favoriteGuids == null)
+                {
+                    favoriteGuids = new string[FavoriteSlotCount];
+                    var saved = EditorPrefs.GetString(FavoritesKey).Split('|');
+                    Array.Copy(saved, favoriteGuids, Mathf.Min(saved.Length, FavoriteSlotCount));
+                }
+                return favoriteGuids;
+            }
+        }
+
+        static string FavoritePath(string guid)
+        {
+            if (string.IsNullOrEmpty(guid)) return null;
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            return path.StartsWith(MapEditorInstaller.PalettePath + "/", StringComparison.Ordinal) &&
+                path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) ? path : null;
+        }
+
+        static GameObject FavoriteAsset(int slot)
+        {
+            string path = FavoritePath(FavoriteGuids[slot]);
+            return path == null ? null : AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        }
+
+        internal static bool HandleFavoriteShortcut(Event e)
+        {
+            if (e.type != EventType.KeyDown || e.alt || e.control || e.command || e.shift ||
+                EditorApplication.isPlayingOrWillChangePlaymode || GUIUtility.hotControl != 0 || EditorGUIUtility.editingTextField)
+                return false;
+
+            int slot = (int)e.keyCode - (int)KeyCode.Alpha1;
+            if (slot < 0 || slot >= FavoriteSlotCount) return false;
+            var prefab = FavoriteAsset(slot);
+            if (prefab == null) return false;
+
+            e.Use();
+            foreach (var window in Resources.FindObjectsOfTypeAll<MapPaletteWindow>())
+            {
+                window.selected = prefab;
+                window.Repaint();
+            }
+            MapEditorWindow.SetPaletteSelection(prefab, activateBrush: true, activatePlacement: true);
+            return true;
+        }
 
         [MenuItem("Tools/Shape Coop/Map Editor/Palette")]
         public static void Open()
@@ -49,19 +106,21 @@ namespace ShapeCoop.Editor
         }
         void OnGUI()
         {
+            HandleFavoriteShortcut(Event.current);
             EditorGUILayout.LabelField("맵 오브젝트 팔레트", EditorStyles.boldLabel);
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("새로고침")) Refresh(true);
                 if (GUILayout.Button("배치용 폴더 보기")) EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(MapEditorInstaller.PalettePath));
             }
+            DrawFavorites();
             using (new EditorGUILayout.HorizontalScope())
             {
                 folderIndex = EditorGUILayout.Popup(folderIndex, folders.ToArray());
                 tagIndex = EditorGUILayout.Popup(tagIndex, tags.ToArray());
             }
             search = EditorGUILayout.TextField("검색", search);
-            EditorGUILayout.LabelField("프리팹을 Scene에 끌어 놓거나 클릭하여 연속 배치할 오브젝트로 선택하세요.", EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField("기본 오브젝트를 선택한 뒤 Scene의 빈 곳을 끌어 연속 배치하세요. 프리팹을 Scene에 직접 끌어 놓을 수도 있습니다.", EditorStyles.wordWrappedMiniLabel);
             var visible = new List<MapEditorWindow.PaletteItem>();
             foreach (var item in items)
             {
@@ -89,21 +148,106 @@ namespace ShapeCoop.Editor
             EditorGUILayout.Space();
             DrawSelected();
         }
+
+        void DrawFavorites()
+        {
+            EditorGUILayout.LabelField("즐겨찾기 (1–5)", EditorStyles.boldLabel);
+            var row = EditorGUILayout.GetControlRect(false, 54);
+            const float gap = 4f;
+            float width = Mathf.Max(1, (row.width - gap * (FavoriteSlotCount - 1)) / FavoriteSlotCount);
+            for (int slot = 0; slot < FavoriteSlotCount; slot++)
+            {
+                string path = FavoritePath(FavoriteGuids[slot]);
+                var item = path == null ? null : items.Find(candidate => candidate.path == path);
+                favorites[slot] = item;
+                var rect = new Rect(row.x + slot * (width + gap), row.y, width, row.height);
+                GUI.Box(rect, GUIContent.none, item != null && selected == item.prefab ? EditorStyles.helpBox : GUI.skin.box);
+                if (item == null)
+                {
+                    GUI.Label(rect, (slot + 1).ToString(), EditorStyles.centeredGreyMiniLabel);
+                    continue;
+                }
+
+                GUI.Label(new Rect(rect.x + 4, rect.y + 1, 15, 18), (slot + 1).ToString(), EditorStyles.miniLabel);
+                DrawPreview(item.prefab, new Rect(rect.center.x - 16, rect.y + 2, 32, 32));
+                GUI.Label(new Rect(rect.x + 2, rect.yMax - 18, width - 4, 16),
+                    new GUIContent(item.label, item.path), EditorStyles.centeredGreyMiniLabel);
+                DrawFavoriteButton(item, new Rect(rect.xMax - 22, rect.y + 2, 20, 18), slot);
+                HandleItemInput(item, rect, favoriteCard: true);
+            }
+        }
+
+        void ToggleFavorite(MapEditorWindow.PaletteItem item, int slot)
+        {
+            var guids = FavoriteGuids;
+            if (slot >= 0)
+                guids[slot] = "";
+            else
+            {
+                slot = Array.FindIndex(guids, guid => FavoritePath(guid) == null);
+                if (slot < 0)
+                {
+                    ShowNotification(new GUIContent("즐겨찾기는 최대 5개입니다. 별표를 눌러 기존 항목을 해제하세요."));
+                    return;
+                }
+
+                string guid = AssetDatabase.AssetPathToGUID(item.path);
+                if (string.IsNullOrEmpty(guid)) return;
+                guids[slot] = guid;
+            }
+            EditorPrefs.SetString(FavoritesKey, string.Join("|", guids));
+            Repaint();
+        }
+
+        void DrawFavoriteButton(MapEditorWindow.PaletteItem item, Rect rect, int slot)
+        {
+            if (GUI.Button(rect, slot >= 0 ? RemoveFavorite : AddFavorite, EditorStyles.miniButton))
+                ToggleFavorite(item, slot);
+        }
+
+        void DrawPreview(GameObject asset, Rect rect)
+        {
+            var image = AssetPreview.GetAssetPreview(asset) ?? AssetPreview.GetMiniThumbnail(asset);
+            if (image != null) GUI.DrawTexture(rect, image, ScaleMode.ScaleToFit, true);
+            if (AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID())) Repaint();
+        }
+
         void DrawItem(MapEditorWindow.PaletteItem item, Rect rect)
         {
             var asset = item.prefab;
             GUI.Box(rect, new GUIContent("", item.path), selected == asset ? EditorStyles.helpBox : GUI.skin.box);
-            var image = AssetPreview.GetAssetPreview(asset) ?? AssetPreview.GetMiniThumbnail(asset);
-            if (image != null) GUI.DrawTexture(new Rect(rect.x + 23, rect.y + 4, 80, 80), image, ScaleMode.ScaleToFit, true);
-            if (AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID())) Repaint();
+            DrawPreview(asset, new Rect(rect.x + 23, rect.y + 4, 80, 80));
             GUI.Label(new Rect(rect.x + 4, rect.y + 85, 118, 20), new GUIContent(item.label, item.path), EditorStyles.centeredGreyMiniLabel);
             GUI.Label(new Rect(rect.x + 4, rect.y + 105, 118, 20), string.Join(", ", MapPaletteTags.GetTags(asset)), EditorStyles.centeredGreyMiniLabel);
+            DrawFavoriteButton(item, new Rect(rect.xMax - 22, rect.y + 2, 20, 18), Array.IndexOf(favorites, item));
+            HandleItemInput(item, rect, favoriteCard: false);
+        }
+
+        void HandleItemInput(MapEditorWindow.PaletteItem item, Rect rect, bool favoriteCard)
+        {
+            var asset = item.prefab;
             var e = Event.current; int control = GUIUtility.GetControlID(FocusType.Passive, rect); var type = e.GetTypeForControl(control);
-            if (type == EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition)) { GUIUtility.hotControl = control; dragged = asset; dragStart = e.mousePosition; e.Use(); }
+            if (type == EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition))
+            {
+                GUIUtility.keyboardControl = 0;
+                GUIUtility.hotControl = control;
+                dragged = asset;
+                dragStart = e.mousePosition;
+                e.Use();
+            }
             else if (type == EventType.MouseDrag && GUIUtility.hotControl == control && dragged == asset && Vector2.Distance(e.mousePosition, dragStart) > 3)
-            { selected = asset; MapEditorWindow.SetPaletteSelection(asset); GUIUtility.hotControl = 0; DragAndDrop.PrepareStartDrag(); DragAndDrop.objectReferences = new UnityEngine.Object[] { asset }; DragAndDrop.StartDrag(item.label); dragged = null; e.Use(); }
+            { selected = asset; MapEditorWindow.SetPaletteSelection(asset, activateBrush: false); GUIUtility.hotControl = 0; DragAndDrop.PrepareStartDrag(); DragAndDrop.objectReferences = new UnityEngine.Object[] { asset }; DragAndDrop.StartDrag(item.label); dragged = null; e.Use(); }
             else if (type == EventType.MouseUp && GUIUtility.hotControl == control)
-            { GUIUtility.hotControl = 0; dragged = null; if (rect.Contains(e.mousePosition)) { selected = asset; MapEditorWindow.SetPaletteSelection(asset); } e.Use(); }
+            {
+                GUIUtility.hotControl = 0;
+                dragged = null;
+                if (rect.Contains(e.mousePosition))
+                {
+                    selected = asset;
+                    MapEditorWindow.SetPaletteSelection(asset, activateBrush: true, activatePlacement: favoriteCard);
+                }
+                e.Use();
+            }
         }
         void DrawSelected()
         {

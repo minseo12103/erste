@@ -41,15 +41,22 @@ namespace ShapeCoop.Editor
             }
             finally { Object.DestroyImmediate(section); Object.DestroyImmediate(map); AssetDatabase.DeleteAsset(path); }
         }
-        static void Step(MapGimmick g, int count)
+        static void Step(MapGimmick g, int count, PrototypePlayer player = null)
         {
-            var update = typeof(MapGimmick).GetMethod("FixedUpdate", Private); Physics2D.SyncTransforms();
-            for (int i = 0; i < count; i++) { update.Invoke(g, null); Physics2D.Simulate(.02f); }
+            var update = typeof(MapGimmick).GetMethod("FixedUpdate", Private);
+            var playerUpdate = typeof(PrototypePlayer).GetMethod("FixedUpdate", Private); Physics2D.SyncTransforms();
+            for (int i = 0; i < count; i++) { if (player != null) playerUpdate.Invoke(player, null); update.Invoke(g, null); Physics2D.Simulate(.02f); }
         }
         static Rigidbody2D Ball(float velocity)
         {
             var obj = new GameObject("goal ball"); var rb = obj.AddComponent<Rigidbody2D>(); rb.position = new Vector2(-1.5f, 0); rb.gravityScale = 0; rb.linearVelocity = Vector2.right * velocity; rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             obj.AddComponent<CircleCollider2D>().radius = .5f; obj.AddComponent<MapGoalBall>(); return rb;
+        }
+        static PrototypePlayer Player(PrototypeSettings settings, int shape)
+        {
+            var obj = new GameObject("brick test player"); var player = obj.AddComponent<PrototypePlayer>();
+            player.Initialize(settings, new PlayerData { id = "brick-test", name = "test", shape = shape, hasCharacterLayout = true, characterSize = 1, helmetSize = 1 }, new Vector2(-1.3f, 0), true);
+            return player;
         }
         static void Tick()
         {
@@ -64,6 +71,27 @@ namespace ShapeCoop.Editor
                 Check(collider.size == new Vector2(.8f, 3) && host.impactSpeed == 8 && host.GetComponentsInChildren<Collider2D>(true).Length == 1, "brick wall physics changed");
                 Check(image != null && image.intact != null && image.cracked != null && image.rubbleSprite != null && image.burstFrames.Length == 6 && image.wall.sprite == image.intact && image.rubble.sprite == null, "initial brick artwork missing");
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-brickCapture") >= 0) Capture("intact");
+                var settings = new GameObject("brick test settings").AddComponent<PrototypeSettings>(); settings.gravityScale = 0;
+                var walking = Player(settings, 1); walking.move = 1; Step(host, 30, walking);
+                Check(walking.shapeCollider.IsTouching(collider) && !host.Capture(0).broken && collider.enabled, "walking player should touch but not break wall");
+                walking.dashPending = true; Step(host, 2, walking);
+                Check(host.Capture(0).broken && !collider.enabled, "dashing while touching wall did not break it");
+                host.ResetGimmick();
+                Object.DestroyImmediate(walking.gameObject);
+                for (int shape = 0; shape < 3; shape++)
+                {
+                    var player = Player(settings, shape); player.move = 1; player.dashPending = true; Step(host, 4, player);
+                    var playerState = JsonUtility.FromJson<GimmickData>(JsonUtility.ToJson(host.Capture(0)));
+                    Check(playerState.broken && !collider.enabled && image.wall.sprite == image.cracked, "dashing player did not break wall: " + shape);
+                    remote.Apply(playerState, true);
+                    Check(!remote.GetComponent<Collider2D>().enabled && other.wall.sprite == other.cracked, "client did not show player-broken wall: " + shape);
+                    Object.DestroyImmediate(player.gameObject); host.ResetGimmick(); remote.Apply(host.Capture(0), true);
+                    Check(collider.enabled && remote.GetComponent<Collider2D>().enabled, "player-broken wall did not reset: " + shape);
+                }
+                Object.DestroyImmediate(settings.gameObject);
+                var unrelated = Ball(20); Object.DestroyImmediate(unrelated.GetComponent<MapGoalBall>()); Step(host, 3);
+                Check(unrelated.GetComponent<Collider2D>().IsTouching(collider) && !host.Capture(0).broken && collider.enabled, "unrelated body broke wall");
+                Object.DestroyImmediate(unrelated.gameObject);
                 var slow = Ball(4); Step(host, 15); Check(!host.Capture(0).broken && collider.enabled && image.wall.sprite == image.intact, "slow ball broke wall"); Object.DestroyImmediate(slow.gameObject);
                 var fast = Ball(20); Step(host, 3); var state = JsonUtility.FromJson<GimmickData>(JsonUtility.ToJson(host.Capture(0)));
                 Check(state.broken && !collider.enabled && image.wall.sprite == image.cracked, "fast ball did not crack and open wall");

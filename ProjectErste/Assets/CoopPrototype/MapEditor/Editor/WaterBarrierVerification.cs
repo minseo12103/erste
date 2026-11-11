@@ -55,7 +55,17 @@ namespace ShapeCoop.Editor
         static Rigidbody2D Ball(Vector2 position)
         {
             var obj = new GameObject("test goal ball"); var rb = obj.AddComponent<Rigidbody2D>(); rb.position = position; rb.gravityScale = 0; rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            obj.AddComponent<CircleCollider2D>().radius = .6f; obj.AddComponent<MapGoalBall>(); return rb;
+            obj.AddComponent<CircleCollider2D>().radius = .04f; obj.AddComponent<MapGoalBall>(); return rb;
+        }
+        internal static Vector2 RightFlowSample(MapGimmick barrier)
+        {
+            var branch = barrier.transform.Find("Water right flow (runtime)");
+            var filter = branch != null ? branch.GetComponent<MeshFilter>() : null;
+            Check(filter != null && branch.GetComponent<MeshRenderer>().enabled && filter.sharedMesh != null, "right branch not rendered");
+            var vertices = filter.sharedMesh.vertices;
+            Check(vertices.Length >= 4, "right branch has no water geometry");
+            int row = (vertices.Length / 2 - 1) * 3 / 4;
+            return branch.TransformPoint((vertices[row * 2] + vertices[row * 2 + 1]) * .5f);
         }
         static void Tick()
         {
@@ -67,39 +77,44 @@ namespace ShapeCoop.Editor
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Prefab); var host = Object.Instantiate(prefab).GetComponent<MapGimmick>(); host.Initialize(true);
                 var remote = Object.Instantiate(prefab, new Vector3(10, 0), Quaternion.identity).GetComponent<MapGimmick>(); remote.Initialize(false);
                 var area = host.GetComponent<BoxCollider2D>(); var visual = host.visual.GetComponent<WaterBarrierVisual>(); var other = remote.visual.GetComponent<WaterBarrierVisual>();
-                var main = host.visual.Find("Water"); var left = host.visual.Find("Water deflected left (runtime)"); var right = host.visual.Find("Water deflected right (runtime)");
+                var main = host.visual.Find("Water");
                 var stream = main.Find("Stream art").GetComponent<SpriteRenderer>();
-                Check(area != null && area.isTrigger && area.size == new Vector2(2, 5) && area.offset == new Vector2(0, -2.5f) && host.force == 24 && host.GetComponentsInChildren<Collider2D>(true).Length == 1, "water physics changed");
+                var mainFlow = host.transform.Find("Water main flow (runtime)").GetComponent<MeshRenderer>();
+                Check(area != null && area.isTrigger && area.size == new Vector2(2, 5) && area.offset == new Vector2(0, -2.5f) && host.force == 24 && !host.transform.Find("Body colliders (physics)/Water pipe").GetComponent<BoxCollider2D>().isTrigger, "water trigger or pipe incorrect");
                 Check(host.visual.Find("Pipe").GetComponent<SpriteRenderer>().sprite.name == "WaterBarrier_Pipe" && visual != null && visual.streamFrames.Length == 4 && visual.splashFrames.Length == 3 && visual.splitFrames.Length == 4, "water artwork missing");
-                Check(stream.sprite == visual.streamFrames[0] && visual.splash.sprite == null && visual.split.sprite == null && !left.gameObject.activeSelf && !right.gameObject.activeSelf, "unshielded water appearance incorrect");
-                for (int i = 0; i < 4; i++)
-                {
-                    visual.Show((i + .1f) / visual.framesPerSecond, false, 0, 0, 0, 0);
-                    Check(stream.sprite == visual.streamFrames[i] && left.Find("Stream art").GetComponent<SpriteRenderer>().sprite == visual.streamFrames[i] && right.Find("Stream art").GetComponent<SpriteRenderer>().sprite == visual.streamFrames[i], "water frames do not animate together");
-                }
-                host.ResetGimmick(); Check(stream.sprite == visual.streamFrames[0], "restart did not reset water animation");
+                Check(!stream.enabled && mainFlow.enabled && visual.splash.sprite == null && visual.split.sprite == null, "unshielded water appearance incorrect");
+                var initialFrame = mainFlow.sharedMaterial.GetVector("_AtlasRect");
+                Step(host, 8);
+                Check(mainFlow.sharedMaterial.GetVector("_AtlasRect") != initialFrame, "unshielded water frames did not animate");
+                host.ResetGimmick(); Check(mainFlow.sharedMaterial.GetVector("_AtlasRect") == initialFrame, "restart did not reset water animation");
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-waterCapture") >= 0) Capture("flow");
                 var settings = new GameObject("settings").AddComponent<PrototypeSettings>(); settings.gravityScale = 0;
-                var triangle = Player(settings, 0, new Vector2(-.2f, -1)); triangle.freezePending = true;
-                var covered = Ball(new Vector2(-.55f, -2.5f)); var exposed = Ball(new Vector2(.75f, -2.5f));
-                Step(host, 8, triangle); var state = JsonUtility.FromJson<GimmickData>(JsonUtility.ToJson(host.Capture(0)));
-                Check(state.shielded && state.shieldHeight > .9f && triangle.frozen && !triangle.stunned, "triangle shield or existing player rule changed");
-                Check(exposed.linearVelocity.y < -.2f && covered.linearVelocity.y > exposed.linearVelocity.y + .1f, "triangle did not protect the ball");
-                Check(visual.splash.sprite != null && visual.split.sprite != null && left.gameObject.activeSelf && right.gameObject.activeSelf, "shielded water did not split visually");
-                Check(Mathf.Abs(visual.split.transform.localPosition.y - state.shieldY) < .01f && visual.split.transform.localScale.x > 0 && visual.split.transform.localScale.y > 0, "split effect is not at the triangle");
-                remote.Apply(state, true); Check(other.splash.sprite == visual.splash.sprite && other.split.sprite == visual.split.sprite && Mathf.Abs(other.split.transform.localPosition.y - visual.split.transform.localPosition.y) < .01f, "client shield appearance disagrees with host");
+                var triangle = Player(settings, 0, new Vector2(0, -1)); triangle.freezePending = true;
+                Step(host, 2, triangle);
+                var sample = RightFlowSample(host);
+                var covered = Ball(new Vector2(0, sample.y)); var exposed = Ball(sample);
+                Step(host, 4, triangle); var state = JsonUtility.FromJson<GimmickData>(JsonUtility.ToJson(host.Capture(0)));
+                Check(state.shielded && triangle.frozen && !triangle.stunned, "triangle shield or existing player rule changed");
+                Check(exposed.linearVelocity.y < -.2f && covered.linearVelocity.sqrMagnitude < .0001f, "ball force did not match the visible branch and dry gap");
+                var left = host.transform.Find("Water left flow (runtime)").GetComponent<MeshRenderer>();
+                var right = host.transform.Find("Water right flow (runtime)").GetComponent<MeshRenderer>();
+                Check(visual.splash.sprite != null && visual.split.sprite == null && left.enabled && right.enabled, "shielded water did not split visually");
+                remote.Apply(state, true);
+                Check(other.splash.sprite == visual.splash.sprite && Vector2.Distance(RightFlowSample(remote) - (Vector2)remote.transform.position, sample) < .01f,
+                    "client shield appearance disagrees with host");
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-waterCapture") >= 0)
                 {
                     triangle.body.position = new Vector2(-.2f, -2); covered.position = new Vector2(-.55f, -3.5f); exposed.position = new Vector2(.75f, -3.5f);
                     Step(host, 2, triangle); Capture("shielded");
                 }
-                triangle.body.position = new Vector2(-.55f, -1); Step(host, 2, triangle);
-                Check(host.Capture(0).shielded && !left.gameObject.activeSelf && right.gameObject.activeSelf && visual.split.sprite != null && visual.split.transform.localPosition.x >= -1, "shield at barrier edge did not clip the split correctly");
+                triangle.body.position = new Vector2(-1.12f, -1); Step(host, 2, triangle);
+                Check(host.Capture(0).shielded && !left.enabled && right.enabled, "shield at barrier edge did not produce a single-sided flow");
                 Object.DestroyImmediate(triangle.gameObject); Object.DestroyImmediate(covered.gameObject); Object.DestroyImmediate(exposed.gameObject); Physics2D.SyncTransforms();
-                Step(host, 2); Check(!host.Capture(0).shielded && visual.splash.sprite == null && visual.split.sprite == null && !left.gameObject.activeSelf && !right.gameObject.activeSelf, "water did not restore after shield left");
+                Step(host, 2); Check(!host.Capture(0).shielded && visual.splash.sprite == null && visual.split.sprite == null && !left.enabled && !right.enabled, "water did not restore after shield left");
                 var square = Player(settings, 1, new Vector2(0, -2)); Step(host, 8, square); Check(!square.stunned, "water must not stun the player");
                 host.ResetGimmick(); remote.Apply(host.Capture(0), true);
-                Check(visual.splash.sprite == null && visual.split.sprite == null && stream.sprite == visual.streamFrames[0] && other.splash.sprite == null, "restart did not reset water presentation");
+                Check(visual.splash.sprite == null && visual.split.sprite == null && mainFlow.enabled &&
+                    mainFlow.sharedMaterial.GetVector("_AtlasRect") == initialFrame && other.splash.sprite == null, "restart did not reset water presentation");
                 Physics2D.simulationMode = mode; SessionState.SetBool(Key, false); Debug.Log("SHAPE_WATER_BARRIER_VERIFICATION_OK"); EditorApplication.Exit(0);
             }
             catch (Exception e) { Physics2D.simulationMode = mode; SessionState.SetBool(Key, false); Debug.LogException(e); EditorApplication.Exit(1); }

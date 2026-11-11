@@ -61,7 +61,7 @@ namespace ShapeCoop.Editor
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Prefab); var host = Object.Instantiate(prefab).GetComponent<MapGimmick>(); host.Initialize(true);
                 var remote = Object.Instantiate(prefab, new Vector3(10, 0), Quaternion.identity).GetComponent<MapGimmick>(); remote.Initialize(false);
                 var image = host.visual.GetComponent<MagnetFieldVisual>(); var other = remote.visual.GetComponent<MagnetFieldVisual>(); var area = host.GetComponent<BoxCollider2D>();
-                Check(area.isTrigger && area.size == new Vector2(4, 5) && area.offset == new Vector2(0, -2.5f) && host.force == 28 && host.activeSeconds == 1 && host.inactiveSeconds == 2 && host.GetComponentsInChildren<Collider2D>(true).Length == 1, "magnet physics changed");
+                Check(area.isTrigger && area.size == new Vector2(4, 5) && area.offset == new Vector2(0, -2.5f) && host.force == 28 && host.activeSeconds == 1 && host.inactiveSeconds == 2 && host.transform.Find("Body colliders (physics)/Magnet housing").GetComponent<BoxCollider2D>().isTrigger == false, "magnet trigger or housing incorrect");
                 Check(image != null && image.device.sprite == image.deviceOff && image.field.sprite == null && image.fieldFrames.Length == 4 && image.deviceOnFrames.Length == 2, "initial magnet artwork missing");
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-magnetCapture") >= 0) Capture("off");
                 host.inactiveSeconds = .1f; host.activeSeconds = .4f;

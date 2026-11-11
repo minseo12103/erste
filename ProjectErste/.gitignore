@@ -3,6 +3,9 @@
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
 .utmp/
+# Local verification copies and generated preview/test results.
+/.codex-*-check/
+/ArtSource/Previews/
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/

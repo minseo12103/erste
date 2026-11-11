@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace ShapeCoop
 {
@@ -30,9 +32,7 @@ namespace ShapeCoop
         [Min(.1f)] public float beamRange = 5f;
         bool authority, initialized, active, broken, triggered;
         float timer, offset, targetOffset, angle, targetAngle, beamLength, targetBeam, pulleyVelocity;
-        bool shielded, sparkHit;
-        float shieldX, shieldY, shieldHalfWidth, shieldHeight;
-        Transform waterMain, waterLeft, waterRight;
+        bool sparkHit;
         Vector3 initialA, initialB;
         Vector3 initialBeamPosition;
         Quaternion initialRotation;
@@ -45,12 +45,16 @@ namespace ShapeCoop
         CementImpactVisual cementVisual;
         WeldingSparkVisual weldingVisual;
         WaterBarrierVisual waterVisual;
+        List<Collider2D> waterContacts;
+        HashSet<Rigidbody2D> waterBalls;
+        internal WaterBarrierFlow WaterFlow { get; private set; }
         BrickWallVisual brickVisual;
         MagnetFieldVisual magnetVisual;
         NitrogenGeyserVisual nitrogenVisual;
         float nitrogenDisplayDuration;
         RotatingCranePlatforms cranePlatforms;
         float progressReceivedAt;
+        readonly HashSet<Rigidbody2D> windBodiesThisStep = new HashSet<Rigidbody2D>();
         const float SandBurstDuration = .58f;
 
         public void Initialize(bool host)
@@ -73,16 +77,18 @@ namespace ShapeCoop
             cranePlatforms = kind == MapGimmickKind.Crane ? GetComponent<RotatingCranePlatforms>() : null;
             if (cranePlatforms != null) cranePlatforms.Initialize(host, rotatingBeam);
             if (kind == MapGimmickKind.Oil) oilMaterial = new PhysicsMaterial2D("Map oil") { friction = 0, bounciness = 0 };
-            if (kind == MapGimmickKind.Sprinkler && visual != null)
+            if (kind == MapGimmickKind.Sprinkler)
             {
-                waterMain = visual.Find("Water");
-                if (waterMain != null)
+                WaterFlow = new WaterBarrierFlow();
+                waterContacts = new List<Collider2D>();
+                waterBalls = new HashSet<Rigidbody2D>();
+                if (visual != null)
                 {
-                    waterLeft = Instantiate(waterMain, visual); waterLeft.name = "Water deflected left (runtime)";
-                    waterRight = Instantiate(waterMain, visual); waterRight.name = "Water deflected right (runtime)";
+                    var water = visual.Find("Water");
+                    waterVisual = visual.GetComponentInChildren<WaterBarrierVisual>(true);
+                    if (waterVisual == null && water != null) waterVisual = visual.gameObject.AddComponent<WaterBarrierVisual>();
+                    if (waterVisual != null) waterVisual.Bind(water, transform);
                 }
-                waterVisual = visual.GetComponentInChildren<WaterBarrierVisual>(true);
-                if (waterVisual != null) waterVisual.Bind(waterMain, waterLeft, waterRight);
             }
             if (!host)
             {
@@ -94,9 +100,11 @@ namespace ShapeCoop
         }
         public void ResetGimmick()
         {
+            windBodiesThisStep.Clear();
             timer = offset = targetOffset = angle = targetAngle = pulleyVelocity = 0; beamLength = targetBeam = beamRange;
             progressReceivedAt = Time.time;
-            broken = triggered = shielded = sparkHit = false; active = kind != MapGimmickKind.Sparks && kind != MapGimmickKind.Magnet && kind != MapGimmickKind.Nitrogen;
+            broken = triggered = sparkHit = false; active = kind != MapGimmickKind.Sparks && kind != MapGimmickKind.Magnet && kind != MapGimmickKind.Nitrogen;
+            if (WaterFlow != null && solid is BoxCollider2D waterBox) WaterFlow.Set(transform, WaterArea(waterBox), default);
             if (solid != null && (kind == MapGimmickKind.Sand || kind == MapGimmickKind.BrickWall)) solid.enabled = true;
             if (windEffect != null) windEffect.ResetAnimation();
             if (cementVisual != null) cementVisual.ResetAnimation();
@@ -115,6 +123,7 @@ namespace ShapeCoop
         void FixedUpdate()
         {
             if (!initialized || !authority) return;
+            if (kind == MapGimmickKind.Vent) windBodiesThisStep.Clear();
             float dt = Time.fixedDeltaTime;
             if (kind == MapGimmickKind.Sand && triggered)
             {
@@ -137,7 +146,7 @@ namespace ShapeCoop
                 if (cranePlatforms != null) cranePlatforms.Apply(angle, false);
             }
             if (kind == MapGimmickKind.Sparks) TickSpark();
-            if (kind == MapGimmickKind.Sprinkler) FindWaterShield();
+            if (kind == MapGimmickKind.Sprinkler) TickWater();
             RefreshVisual();
         }
         void Update()
@@ -201,54 +210,75 @@ namespace ShapeCoop
                 break;
             }
         }
-        bool TriangleShields(Vector2 target)
+        static Rect WaterArea(BoxCollider2D box) => new Rect(box.offset - box.size * .5f, box.size);
+
+        WaterBarrierFlow.Obstacle WaterObstacleFor(PrototypePlayer player)
         {
-            float height = transform.position.y - target.y;
-            if (height <= 0) return false;
-            var start = new Vector2(target.x, transform.position.y);
-            foreach (var hit in Physics2D.RaycastAll(start, Vector2.down, height))
+            var collider = player.shapeCollider;
+            var body = player.body;
+            var scale = (Vector2)collider.transform.lossyScale;
+            var rotation = Quaternion.Euler(0, 0, body.rotation);
+            var center = body.position + (Vector2)(rotation * Vector2.Scale(collider.offset, scale));
+            var halfSize = new Vector2(Mathf.Abs(scale.x), Mathf.Abs(scale.y)) * .5f;
+            if (collider is BoxCollider2D box) halfSize = Vector2.Scale(halfSize, box.size);
+            if (collider is CircleCollider2D circle)
             {
-                if (hit.collider == null || hit.collider.isTrigger || hit.collider.transform.IsChildOf(transform)) continue;
-                var player = hit.collider.GetComponentInParent<PrototypePlayer>();
-                if (player != null && player.shape == 0) return true;
+                float radius = circle.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y));
+                halfSize = Vector2.one * radius;
             }
-            return false;
-        }
-        void FindWaterShield()
-        {
-            shielded = false;
-            if (!(solid is BoxCollider2D box)) return;
-            var bounds = box.bounds; float highest = float.NegativeInfinity;
-            foreach (var hit in Physics2D.OverlapBoxAll(bounds.center, bounds.size, 0))
+            return new WaterBarrierFlow.Obstacle
             {
-                if (hit == null || hit.isTrigger) continue;
-                var player = hit.GetComponentInParent<PrototypePlayer>();
-                if (player == null || player.shape != 0 || hit.bounds.max.y <= highest) continue;
-                highest = hit.bounds.max.y; shielded = true;
-                var center = transform.InverseTransformPoint(hit.bounds.center);
-                var top = transform.InverseTransformPoint(new Vector3(hit.bounds.center.x, hit.bounds.max.y));
-                var left = transform.InverseTransformPoint(new Vector3(hit.bounds.min.x, hit.bounds.center.y));
-                var bottom = transform.InverseTransformPoint(new Vector3(hit.bounds.center.x, hit.bounds.min.y));
-                shieldX = center.x; shieldY = top.y; shieldHalfWidth = Mathf.Abs(center.x - left.x); shieldHeight = Mathf.Abs(top.y - bottom.y);
+                Shape = player.shape,
+                Center = transform.InverseTransformPoint(center),
+                HalfSize = halfSize,
+                Angle = collider is CircleCollider2D ? 0 : Mathf.DeltaAngle(transform.eulerAngles.z, body.rotation)
+            };
+        }
+
+        void TickWater()
+        {
+            if (WaterFlow == null || !(solid is BoxCollider2D box) || !box.enabled) return;
+            var scene = gameObject.scene.GetPhysicsScene2D();
+            var area = WaterArea(box);
+            var filter = new ContactFilter2D();
+            filter.SetLayerMask(Physics2D.GetLayerCollisionMask(gameObject.layer));
+            filter.useTriggers = false;
+            var bounds = box.bounds;
+            scene.OverlapBox(bounds.center, bounds.size, 0, filter, waterContacts);
+            WaterBarrierFlow.Obstacle blocker = default;
+            float highest = float.NegativeInfinity;
+            foreach (var hit in waterContacts)
+            {
+                var body = hit.attachedRigidbody;
+                if (body == null || !body.TryGetComponent<PrototypePlayer>(out var player) ||
+                    player.shapeCollider != hit || Physics2D.GetIgnoreCollision(box, hit)) continue;
+                var candidate = WaterObstacleFor(player);
+                if (!WaterFlow.TryGetImpact(transform, area, candidate, out var impact) || impact.y <= highest) continue;
+                highest = impact.y;
+                blocker = candidate;
             }
-        }
-        void RefreshWater()
-        {
-            if (waterMain == null || !(solid is BoxCollider2D box)) return;
-            float left = box.offset.x - box.size.x * .5f, right = box.offset.x + box.size.x * .5f;
-            float top = box.offset.y + box.size.y * .5f, bottom = box.offset.y - box.size.y * .5f;
-            float split = shielded ? Mathf.Clamp(shieldY, bottom, top) : bottom;
-            SetWaterPart(waterMain, left, right, split, top);
-            float gapLeft = Mathf.Clamp(shieldX - shieldHalfWidth, left, right), gapRight = Mathf.Clamp(shieldX + shieldHalfWidth, left, right);
-            SetWaterPart(waterLeft, left, shielded ? gapLeft : left, bottom, split);
-            SetWaterPart(waterRight, shielded ? gapRight : right, right, bottom, split);
-        }
-        static void SetWaterPart(Transform part, float left, float right, float bottom, float top)
-        {
-            if (part == null) return;
-            part.gameObject.SetActive(right - left > .01f && top - bottom > .01f);
-            part.localPosition = new Vector3((left + right) * .5f, (bottom + top) * .5f, 0);
-            part.localScale = new Vector3(Mathf.Max(.01f, right-left), Mathf.Max(.01f, top-bottom), 1);
+            WaterFlow.Set(transform, area, blocker);
+            if (WaterFlow.Shielded)
+            {
+                // Redirected water can travel outside the original rectangular trigger.
+                var footprint = WaterFlow.Bounds;
+                var x = transform.TransformVector(Vector3.right * footprint.width);
+                var y = transform.TransformVector(Vector3.up * footprint.height);
+                var size = new Vector2(Mathf.Abs(x.x) + Mathf.Abs(y.x), Mathf.Abs(x.y) + Mathf.Abs(y.y));
+                scene.OverlapBox(transform.TransformPoint(footprint.center), size, 0, filter, waterContacts);
+            }
+            waterBalls.Clear();
+            foreach (var hit in waterContacts)
+            {
+                var body = hit.attachedRigidbody;
+                if (body == null || body.bodyType != RigidbodyType2D.Dynamic || waterBalls.Contains(body) ||
+                    !body.TryGetComponent<MapGoalBall>(out _) || Physics2D.GetIgnoreCollision(box, hit)) continue;
+                Vector2 point = transform.InverseTransformPoint(body.worldCenterOfMass);
+                if (!WaterFlow.TryGetCurrent(point, out var direction)) continue;
+                waterBalls.Add(body);
+                Vector2 worldDirection = transform.TransformVector(direction);
+                body.AddForce(worldDirection.normalized * force * body.mass);
+            }
         }
         void OnCollisionEnter2D(Collision2D collision)
         {
@@ -262,26 +292,37 @@ namespace ShapeCoop
                 if (cementVisual != null) { Vector2 point = collision.contactCount > 0 ? collision.GetContact(0).point : rb.position; cementVisual.Impact(transform.InverseTransformPoint(point)); }
                 rb.linearVelocity = Vector2.zero; rb.angularVelocity = 0;
             }
-            if (kind == MapGimmickKind.BrickWall && ball != null && collision.relativeVelocity.magnitude >= impactSpeed)
+            if (kind == MapGimmickKind.BrickWall && (ball != null || player != null) && collision.relativeVelocity.magnitude >= impactSpeed)
             { broken = true; timer = 0; if (solid != null) solid.enabled = false; RefreshVisual(); }
         }
         void OnCollisionStay2D(Collision2D collision)
         {
-            if (kind == MapGimmickKind.Sand && !triggered) OnCollisionEnter2D(collision);
+            if ((kind == MapGimmickKind.Sand && !triggered) || kind == MapGimmickKind.BrickWall) OnCollisionEnter2D(collision);
         }
         void OnTriggerStay2D(Collider2D other)
         {
-            if (!initialized || !authority || other.isTrigger) return;
+            if (!initialized || !authority || other.isTrigger || kind == MapGimmickKind.Sprinkler) return;
             var rb = other.attachedRigidbody; if (rb == null || rb.bodyType != RigidbodyType2D.Dynamic) return;
+            if (kind == MapGimmickKind.Vent)
+            {
+                if (rb.transform.IsChildOf(transform) || !windBodiesThisStep.Add(rb)) return;
+                Vector3 direction = transform.TransformVector(Vector3.up);
+                if (direction.sqrMagnitude < .000001f || solid == null) return;
+                // Apply the same force to each body: heavier bodies accelerate less.
+                // The overlap's horizontal center lets an off-center beam rotate naturally.
+                var area = solid.bounds; var target = other.bounds;
+                float lo = Mathf.Max(area.min.x, target.min.x), hi = Mathf.Min(area.max.x, target.max.x);
+                float contactX = lo <= hi ? (lo + hi) * .5f : rb.worldCenterOfMass.x;
+                rb.AddForceAtPosition((Vector2)direction.normalized * force, new Vector2(contactX, rb.worldCenterOfMass.y));
+                return;
+            }
             var player = rb.GetComponent<PrototypePlayer>(); var ball = rb.GetComponent<MapGoalBall>();
             if (player == null && ball == null) return;
             switch (kind)
             {
-                case MapGimmickKind.Vent: if (ball != null) rb.AddForce(Vector2.up * force * rb.mass); break;
                 case MapGimmickKind.Oil: if (player != null) player.TouchOil(oilMaterial); if (ball != null) ball.TouchOil(oilMaterial); break;
                 case MapGimmickKind.Magnet: if (active) rb.AddForce(((Vector2)transform.position - rb.position).normalized * force * rb.mass); break;
-                case MapGimmickKind.Nitrogen: if (active && player != null) player.ForceFreeze(effectSeconds); break;
-                case MapGimmickKind.Sprinkler: if (ball != null && !TriangleShields(rb.position)) rb.AddForce(Vector2.down * force * rb.mass); break;
+                case MapGimmickKind.Nitrogen: if (active && player != null && !player.forcedFrozen) player.ForceFreeze(effectSeconds); break;
             }
         }
         void ApplyMovingParts(bool snap)
@@ -351,25 +392,29 @@ namespace ShapeCoop
                 float phase = timer + (authority ? 0 : Mathf.Max(0, Time.time - progressReceivedAt));
                 weldingVisual.Show(active && !broken, sparkHit, endWorld, phase);
             }
-            if (kind == MapGimmickKind.Sprinkler)
+            if (waterVisual != null && WaterFlow != null)
             {
-                RefreshWater();
-                if (waterVisual != null && solid is BoxCollider2D box)
-                {
-                    float left = box.offset.x - box.size.x * .5f, right = box.offset.x + box.size.x * .5f;
-                    float top = box.offset.y + box.size.y * .5f, bottom = box.offset.y - box.size.y * .5f;
-                    float gapLeft = Mathf.Clamp(shieldX - shieldHalfWidth, left, right), gapRight = Mathf.Clamp(shieldX + shieldHalfWidth, left, right);
-                    float level = Mathf.Clamp(shieldY, bottom, top);
-                    float phase = timer + (authority ? 0 : Mathf.Max(0, Time.time - progressReceivedAt));
-                    waterVisual.Show(phase, shielded, (gapLeft + gapRight) * .5f, level, gapRight - gapLeft, Mathf.Min(shieldHeight, level - bottom));
-                }
+                float phase = timer + (authority ? 0 : Mathf.Max(0, Time.time - progressReceivedAt));
+                waterVisual.Show(phase, WaterFlow);
             }
         }
         public GimmickData Capture(int index)
         {
             float stateAngle = kind == MapGimmickKind.Seesaw && authority && rotatingBeam != null
                 ? Mathf.DeltaAngle(transform.eulerAngles.z + initialRotation.eulerAngles.z, rotatingBeam.rotation) : angle;
-            var state = new GimmickData { index = index, active = active, broken = broken, progress = (kind == MapGimmickKind.Sand || kind == MapGimmickKind.Sparks || kind == MapGimmickKind.Sprinkler || kind == MapGimmickKind.BrickWall || kind == MapGimmickKind.Magnet || kind == MapGimmickKind.Nitrogen) ? timer : 0, offset = offset, angle = stateAngle, beamLength = beamLength, shielded = shielded, sparkHit = sparkHit, shieldX = shieldX, shieldY = shieldY, shieldHalfWidth = shieldHalfWidth, shieldHeight = shieldHeight };
+            var state = new GimmickData { index = index, active = active, broken = broken, progress = (kind == MapGimmickKind.Sand || kind == MapGimmickKind.Sparks || kind == MapGimmickKind.Sprinkler || kind == MapGimmickKind.BrickWall || kind == MapGimmickKind.Magnet || kind == MapGimmickKind.Nitrogen) ? timer : 0, offset = offset, angle = stateAngle, beamLength = beamLength, sparkHit = sparkHit };
+            if (WaterFlow != null && WaterFlow.Shielded)
+            {
+                var blocker = WaterFlow.Blocker;
+                // Sprinklers reuse the moving-part fields for shape and rotation. Peers rebuild the same water ribbons.
+                state.shielded = true;
+                state.shieldX = blocker.Center.x;
+                state.shieldY = blocker.Center.y;
+                state.shieldHalfWidth = blocker.HalfSize.x;
+                state.shieldHeight = blocker.HalfSize.y * 2;
+                state.offset = blocker.Shape;
+                state.angle = blocker.Angle;
+            }
             if (kind == MapGimmickKind.Nitrogen) state.nitrogenActiveSeconds = Mathf.Max(.02f, activeSeconds);
             if (cementVisual != null) cementVisual.WriteState(state);
             if (cranePlatforms != null)
@@ -391,10 +436,22 @@ namespace ShapeCoop
             }
             active = state.active; broken = state.broken; triggered = kind == MapGimmickKind.Sand && state.progress > 0; timer = state.progress;
             progressReceivedAt = Time.time;
-            targetOffset = state.offset; targetAngle = state.angle; targetBeam = state.beamLength;
+            targetOffset = WaterFlow == null ? state.offset : 0;
+            targetAngle = WaterFlow == null ? state.angle : 0;
+            targetBeam = state.beamLength;
             if (kind == MapGimmickKind.Sparks && (state.beamLength < beamLength || state.sparkHit != sparkHit)) beamLength = state.beamLength;
             sparkHit = state.sparkHit;
-            shielded = state.shielded; shieldX = state.shieldX; shieldY = state.shieldY; shieldHalfWidth = state.shieldHalfWidth; shieldHeight = state.shieldHeight;
+            if (WaterFlow != null && solid is BoxCollider2D waterBox)
+            {
+                var blocker = state.shielded ? new WaterBarrierFlow.Obstacle
+                {
+                    Shape = (int)state.offset,
+                    Center = new Vector2(state.shieldX, state.shieldY),
+                    HalfSize = new Vector2(state.shieldHalfWidth, state.shieldHeight * .5f),
+                    Angle = state.angle
+                } : default;
+                WaterFlow.Set(transform, WaterArea(waterBox), blocker);
+            }
             if (solid != null && (kind == MapGimmickKind.Sand || kind == MapGimmickKind.BrickWall)) solid.enabled = !broken;
             if (snap && windEffect != null) windEffect.ResetAnimation();
             if (cementVisual != null) cementVisual.ApplyState(state);

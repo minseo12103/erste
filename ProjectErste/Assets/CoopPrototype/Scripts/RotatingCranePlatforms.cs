@@ -33,6 +33,9 @@ namespace ShapeCoop
                 {
                     var part = hub.Find(name); var renderer = part != null ? part.GetComponent<SpriteRenderer>() : null;
                     if (renderer != null) { var size = renderer.size; size.x = 2f * radius + .88f; renderer.size = size; }
+                    var collision = part != null ? part.Find("Spoke collision") : null;
+                    var box = collision != null ? collision.GetComponent<BoxCollider2D>() : null;
+                    if (box != null) box.size = new Vector2(2f * radius + .22f, .23f);
                 }
             }
             if (platforms == null) return;

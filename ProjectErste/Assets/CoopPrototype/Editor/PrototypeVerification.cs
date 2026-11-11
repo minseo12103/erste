@@ -72,6 +72,13 @@ namespace ShapeCoop.Editor
         }
         public static void Run()
         {
+            // This legacy verifier creates temporary objects and exits the Editor.
+            // Never run it against a developer's open scene.
+            if (!Application.isBatchMode)
+            {
+                Debug.LogError("PrototypeVerification.Run is batch-only; use an isolated project copy.");
+                return;
+            }
             try
             {
                 var clock = new PrototypeClock(); clock.Begin(100); Check(Math.Abs(clock.Elapsed(120) - 20) < .001, "clock before restart");
@@ -164,6 +171,21 @@ namespace ShapeCoop.Editor
                 Check(bounced, "ball must bounce off player");
                 UnityEngine.Object.DestroyImmediate(material); UnityEngine.Object.DestroyImmediate(ballGo); UnityEngine.Object.DestroyImmediate(wall); UnityEngine.Object.DestroyImmediate(ground); UnityEngine.Object.DestroyImmediate(obj); UnityEngine.Object.DestroyImmediate(settingsGo); Physics2D.simulationMode = oldMode;
                 Debug.Log("SHAPE_COOP_VERIFICATION_OK: clock, gravity and diagonal dash, collision, freeze, reset, jump, ball bounce");
+                EditorApplication.Exit(0);
+            }
+            catch (Exception e) { Physics2D.simulationMode = SimulationMode2D.FixedUpdate; Debug.LogException(e); EditorApplication.Exit(1); }
+        }
+
+        // Explicitly opt in to the Windows build; Run only verifies gameplay.
+        public static void BuildWindows()
+        {
+            if (!Application.isBatchMode)
+            {
+                Debug.LogError("PrototypeVerification.BuildWindows is batch-only; use an isolated project copy.");
+                return;
+            }
+            try
+            {
                 Directory.CreateDirectory("Build/ShapeCoop");
                 var report = BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, "Build/ShapeCoop/ShapeCoop.exe", BuildTarget.StandaloneWindows64, BuildOptions.None);
                 Check(report.summary.result == BuildResult.Succeeded, "Windows build failed: " + report.summary.result);

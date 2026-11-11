@@ -23,6 +23,7 @@ namespace ShapeCoop
         PrototypePlayer player;
         Rigidbody2D ball;
         MapGimmick[] gimmicks = System.Array.Empty<MapGimmick>();
+        MapDynamicBodies mapBodies;
         Camera testCamera;
         PhysicsMaterial2D ballMaterial;
         Vector2 ballSpawn;
@@ -34,6 +35,7 @@ namespace ShapeCoop
             if (section == null) { Debug.LogError("Map test: assign a MapSection."); enabled = false; return; }
             gimmicks = section.GetComponentsInChildren<MapGimmick>(true);
             foreach (var gimmick in gimmicks) gimmick.Initialize(true);
+            mapBodies = new MapDynamicBodies(section.transform, gimmicks, true);
             var config = gameObject.AddComponent<PrototypeSettings>();
             if (settingsSource != null) JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(settingsSource), config);
             var marker = ResolveStart();
@@ -97,7 +99,7 @@ namespace ShapeCoop
         public void ResetTest()
         {
             if (player == null || ball == null) return;
-            player.ResetBody(); emoteInput.Reset(); foreach (var gimmick in gimmicks) gimmick.ResetGimmick(); ball.GetComponent<MapGoalBall>()?.ResetEffects();
+            player.ResetBody(); emoteInput.Reset(); foreach (var gimmick in gimmicks) gimmick.ResetGimmick(); mapBodies?.Reset(); ball.GetComponent<MapGoalBall>()?.ResetEffects();
             ball.position = ballSpawn; ball.rotation = 0; ball.linearVelocity = Vector2.zero; ball.angularVelocity = 0; complete = false;
         }
         void Update()

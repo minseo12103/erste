@@ -17,6 +17,13 @@ namespace ShapeCoop
         public PlayerData[] players;
         public BodyData ball;
         public GimmickData[] gimmicks;
+        public int mapBodyOffset;
+        public MapBodyState[] mapBodies;
+    }
+    [Serializable] public struct MapBodyState
+    {
+        public bool present;
+        public float x, y, angle;
     }
     [Serializable] public sealed class PlayerData
     {

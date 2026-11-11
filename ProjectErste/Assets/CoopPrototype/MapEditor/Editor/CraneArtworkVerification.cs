@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEditor;
@@ -100,6 +101,19 @@ namespace ShapeCoop.Editor
                 var rider = new GameObject("riding player").AddComponent<PrototypePlayer>(); var targetPlatform = wheel.platforms[1];
                 rider.Initialize(settings, new PlayerData { shape = 1, hasCharacterLayout = true, characterSize = 1, helmetSize = 1 }, targetPlatform.position + Vector2.up * 1.02f, true);
                 Step(host, 30, rider); Check(rider.shapeCollider.IsTouching(targetPlatform.GetComponent<Collider2D>()), "rider did not land");
+                // A rider can now collide with the crane housing; first verify the unobstructed arc with every collider active.
+                host.rotationSpeed = -45;
+                for (int i = 0; i < 60; i++)
+                {
+                    Step(host, 1, rider); float drift = Mathf.Abs(rider.body.position.x - targetPlatform.position.x);
+                    Check(drift < .65f && rider.body.position.y > targetPlatform.position.y + .7f, "rider did not follow the unobstructed platform at tick " + i);
+                }
+                // Isolate platform carrying for a full rotation; the separate body collision test checks these parts while enabled.
+                var extraColliders = new List<Collider2D>(); var towerColliderRoot = host.transform.Find("Body colliders (physics)");
+                foreach (var c in host.GetComponentsInChildren<Collider2D>(true))
+                    if ((towerColliderRoot != null && c.transform.IsChildOf(towerColliderRoot)) || c.name == "Spoke collision" || c.name == "Gear collision" || c.name.StartsWith("Hanger ", StringComparison.Ordinal)) { if (c.enabled) { extraColliders.Add(c); c.enabled = false; } }
+                host.rotationSpeed = 0; host.ResetGimmick(); rider.ResetBody(); Step(host, 30, rider);
+                Check(rider.shapeCollider.IsTouching(targetPlatform.GetComponent<Collider2D>()), "rider did not reland after isolation");
                 host.rotationSpeed = -45; float maxDrift = 0;
                 for (int i = 0; i < 400; i++)
                 {
@@ -118,7 +132,7 @@ namespace ShapeCoop.Editor
                 rider.move = 0; Step(host, 2, rider);
                 rider.jumpPending = true; Step(host, 1, rider); Check(rider.body.linearVelocity.y > 0, "rider could not jump from the moving platform");
                 rider.move = -1; Step(host, 6, rider); Check(rider.body.linearVelocity.x < 0, "left input must still move toward world-left");
-                Object.DestroyImmediate(rider.gameObject); host.ResetGimmick(); host.rotationSpeed = 0; Physics2D.SyncTransforms();
+                Object.DestroyImmediate(rider.gameObject); foreach (var c in extraColliders) if (c != null) c.enabled = true; host.ResetGimmick(); host.rotationSpeed = 0; Physics2D.SyncTransforms();
                 var locked = new GameObject("fixed player").AddComponent<PrototypePlayer>();
                 locked.Initialize(settings, new PlayerData { shape = 1, hasCharacterLayout = true, characterSize = 1, helmetSize = 1 }, wheel.platforms[0].position + Vector2.up * 1.02f, true);
                 Step(host, 30, locked); locked.freezePending = true; Step(host, 1, locked); Check(locked.frozen, "player could not freeze on the platform");

@@ -31,6 +31,9 @@ namespace ShapeCoop.Editor
                 {
                     var t = gimmick.rotatingBeam.transform.Find(name); var renderer = t != null ? t.GetComponent<SpriteRenderer>() : null;
                     if (renderer != null) objects.Add(renderer);
+                    var collision = t != null ? t.Find("Spoke collision") : null;
+                    var box = collision != null ? collision.GetComponent<BoxCollider2D>() : null;
+                    if (box != null) objects.Add(box);
                 }
             }
             if (crane.platforms != null) foreach (var platform in crane.platforms)

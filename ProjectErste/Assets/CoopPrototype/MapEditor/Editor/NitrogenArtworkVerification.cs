@@ -67,7 +67,7 @@ namespace ShapeCoop.Editor
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Prefab); var host = Object.Instantiate(prefab).GetComponent<MapGimmick>(); host.Initialize(true);
                 var remote = Object.Instantiate(prefab, new Vector3(10, 0), Quaternion.identity).GetComponent<MapGimmick>(); remote.Initialize(false);
                 var image = host.visual.GetComponent<NitrogenGeyserVisual>(); var other = remote.visual.GetComponent<NitrogenGeyserVisual>(); var area = host.GetComponent<BoxCollider2D>();
-                Check(area.isTrigger && area.size == new Vector2(3, 4) && area.offset == new Vector2(0, 2) && host.inactiveSeconds == 2.4f && host.activeSeconds == .6f && host.effectSeconds == 2 && host.GetComponentsInChildren<Collider2D>(true).Length == 1, "nitrogen physics changed");
+                Check(area.isTrigger && area.size == new Vector2(3, 4) && area.offset == new Vector2(0, 2) && host.inactiveSeconds == 2.4f && host.activeSeconds == .6f && host.effectSeconds == 2 && !host.transform.Find("Body colliders (physics)/Nitrogen pipe horizontal").GetComponent<BoxCollider2D>().isTrigger, "nitrogen trigger or pipe incorrect");
                 Check(image != null && image.frames.Length == 6 && image.gas.sprite == null && image.activeArea.sprite == null && host.transform.Find("Pipe").GetComponent<SpriteRenderer>().sprite.name == "Nitrogen_Pipe", "initial nitrogen artwork missing");
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-nitrogenCapture") >= 0) Capture("off");
                 host.inactiveSeconds = .1f; host.activeSeconds = .4f; host.effectSeconds = 1;
@@ -76,8 +76,9 @@ namespace ShapeCoop.Editor
                 var ballObject = new GameObject("goal ball"); var ball = ballObject.AddComponent<Rigidbody2D>(); ball.position = new Vector2(1.25f, 3); ball.gravityScale = 0; ballObject.AddComponent<CircleCollider2D>().radius = .3f; ballObject.AddComponent<MapGoalBall>();
                 Step(host, 4); Check(!player.forcedFrozen && !Ice(player).enabled && !host.Capture(0).active, "inactive geyser froze player");
                 Step(host, 8); var state = JsonUtility.FromJson<GimmickData>(JsonUtility.ToJson(host.Capture(0)));
-                Check(state.active && Mathf.Abs(state.nitrogenActiveSeconds - .4f) < .001f && player.forcedFrozen && player.frozen && player.body.bodyType == RigidbodyType2D.Kinematic && ball.linearVelocity.sqrMagnitude < .001f, "geyser force-freeze changed");
-                var ice = Ice(player); Check(ice.enabled && ice.sprite.name == "Nitrogen_Ice" && player.GetComponentsInChildren<Collider2D>(true).Length == 1, "forced freeze did not show visual-only ice");
+                Check(state.active && Mathf.Abs(state.nitrogenActiveSeconds - .4f) < .001f && player.forcedFrozen && player.frozen &&
+                    player.body.bodyType == RigidbodyType2D.Dynamic && player.body.mass > settings.playerMass && ball.linearVelocity.sqrMagnitude < .001f, "geyser did not create a heavy dynamic ice body");
+                var ice = Ice(player); Check(ice.enabled && ice.sprite.name == "CharacterIceBlock" && ice.color == Color.white && player.GetComponentsInChildren<Collider2D>(true).Length == 1, "forced freeze did not show visual-only ice");
                 remote.Apply(state, true); client.Apply(JsonUtility.FromJson<BodyData>(JsonUtility.ToJson(player.Capture())), true);
                 Check(other.gas.sprite == image.gas.sprite && other.activeArea.sprite != null && Ice(client).enabled, "client freeze or gas visual disagrees with host");
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-nitrogenCapture") >= 0) Capture("active");
@@ -105,6 +106,7 @@ namespace ShapeCoop.Editor
                     Check(Mathf.Abs(spriteSize.x * visualScale.x - 1.62f) < .001f && Mathf.Abs(spriteSize.y * visualScale.y - 1.62f) < .001f, "ice world size differs between character shapes");
                     p.SetCharacterLayout(new CharacterShapeLayout { size = .8f, helmetSize = 1 }); visualScale = frozen.transform.lossyScale;
                     Check(Mathf.Abs(spriteSize.x * visualScale.x - 1.62f) < .001f && Mathf.Abs(spriteSize.y * visualScale.y - 1.62f) < .001f, "ice size changed with character layout");
+                    var layout = Resources.Load<CharacterLayout>("ShapeCoop/CharacterLayout"); if (layout != null) p.SetCharacterLayout(layout.ForShape(shape));
                 }
                 Physics2D.SyncTransforms();
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-nitrogenCapture") >= 0) Capture("characters", 0, 8, 2.4f);

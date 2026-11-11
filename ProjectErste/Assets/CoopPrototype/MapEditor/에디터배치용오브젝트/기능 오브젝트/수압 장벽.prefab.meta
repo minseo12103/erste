@@ -1,5 +1,7 @@
 fileFormatVersion: 2
 guid: a12963f53dac4454cae5263f25c8c31b
+labels:
+- ShapeMapTags_Configured
 PrefabImporter:
   externalObjects: {}
   userData: 

@@ -4,6 +4,10 @@ namespace ShapeCoop
 {
     public sealed class PrototypePlayer : MonoBehaviour
     {
+        const float NitrogenMassMultiplier = 2f;
+        // Cosine of the 50-degree walking limit.
+        const float MinWalkableNormalY = .6427876f;
+
         public string playerId, playerName;
         public int shape, colorIndex;
         public bool frozen;
@@ -22,7 +26,7 @@ namespace ShapeCoop
         float dashRemaining, jumpBoostRemaining;
         float forcedFreezeUntil, stunnedUntil, oilUntil;
         bool manualFrozen;
-        PhysicsMaterial2D normalMaterial;
+        PhysicsMaterial2D normalMaterial, oilMaterial, iceMaterial;
         Vector2 remoteVelocity;
         float remoteAngularVelocity;
         bool remoteIdleEyes;
@@ -40,7 +44,6 @@ namespace ShapeCoop
             characterLayout = CharacterLayout.Resolve(data);
             transform.localScale = Vector3.one * characterLayout.size;
             body = gameObject.AddComponent<Rigidbody2D>();
-            body.mass = settings.playerMass; body.gravityScale = settings.gravityScale;
             body.interpolation = RigidbodyInterpolation2D.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             if (shape == 0)
@@ -61,7 +64,8 @@ namespace ShapeCoop
         public void ResetBody()
         {
             frozen = manualFrozen = forcedFrozen = stunned = false; forcedFreezeUntil = stunnedUntil = oilUntil = 0;
-            if (shapeCollider != null) shapeCollider.sharedMaterial = normalMaterial;
+            oilMaterial = null;
+            RefreshSurfaceMaterial();
             move = 0; jumpPending = dashPending = freezePending = jumpHeld = false;
             dashRemaining = jumpBoostRemaining = 0;
             facing = dashDirection = 1; nextDash = 0; lastJump = lastDash = lastFreeze = 0;
@@ -71,19 +75,18 @@ namespace ShapeCoop
             body.gravityScale = settings.gravityScale;
             if (authority) { body.bodyType = RigidbodyType2D.Dynamic; body.position = spawn; body.rotation = 0; body.linearVelocity = Vector2.zero; body.angularVelocity = 0; }
             else { transform.position = spawn; transform.rotation = Quaternion.identity; }
+            body.mass = settings.playerMass;
             targetPosition = spawn; targetAngle = 0;
         }
-        bool Grounded()
+        bool Grounded(int contactCount)
         {
-            int count = shapeCollider.GetContacts(groundContacts);
-            for (int i = 0; i < count; i++) if (groundContacts[i].normal.y > .45f) return true;
+            for (int i = 0; i < contactCount; i++) if (groundContacts[i].normal.y > .45f) return true;
             return false;
         }
-        bool TryGetCraneVelocity(out Vector2 velocity)
+        bool TryGetCraneVelocity(int contactCount, out Vector2 velocity)
         {
             velocity = Vector2.zero;
-            int count = shapeCollider.GetContacts(groundContacts);
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < contactCount; i++)
             {
                 var contact = groundContacts[i]; if (contact.normal.y <= .45f) continue;
                 var a = contact.collider != null ? contact.collider.attachedRigidbody : null;
@@ -95,17 +98,92 @@ namespace ShapeCoop
             }
             return false;
         }
-        void SetFrozen(bool value)
+        bool TryWalkAlongSlope(int contactCount, ref Vector2 velocity)
         {
-            if (frozen == value) return;
-            frozen = value; jumpBoostRemaining = dashRemaining = 0;
-            body.gravityScale = settings.gravityScale; body.linearVelocity = Vector2.zero; body.angularVelocity = 0;
-            body.bodyType = frozen ? RigidbodyType2D.Kinematic : RigidbodyType2D.Dynamic;
+            Vector2 support = Vector2.zero;
+            Vector2 uphill = Vector2.zero;
+            bool steepUphill = false;
+            for (int i = 0; i < contactCount; i++)
+            {
+                var contact = groundContacts[i];
+                var normal = contact.normal;
+                if (normal.y <= .001f) continue;
+
+                var other = contact.collider == shapeCollider ? contact.otherCollider : contact.collider;
+                if (other == null) continue;
+                var otherBody = other.attachedRigidbody;
+                if (otherBody != null && (otherBody.bodyType == RigidbodyType2D.Dynamic ||
+                    otherBody.TryGetComponent<PrototypePlayer>(out _) || otherBody.TryGetComponent<MapGoalBall>(out _))) continue;
+
+                bool facesMovement = move * normal.x < -.001f;
+                if (normal.y < MinWalkableNormalY)
+                {
+                    steepUphill |= facesMovement;
+                    continue;
+                }
+                if (normal.y > support.y) support = normal;
+                if (facesMovement && (uphill.y == 0 || normal.y < uphill.y)) uphill = normal;
+            }
+
+            // Prefer the ramp when it and the flat ground meet at the player's feet.
+            if (uphill.y > 0) support = uphill;
+            else if (steepUphill) return true;
+            if (support.y == 0 || Mathf.Abs(support.x) < .001f) return false;
+
+            var tangent = new Vector2(support.y, -support.x);
+            float along = Vector2.Dot(velocity, tangent);
+            float target = move * settings.moveSpeed;
+            float acceleration = settings.moveAcceleration;
+            if (move * tangent.y > 0)
+            {
+                target *= support.y;
+                // Offset the player's downhill gravity so there is still traction to push a load.
+                float downhillGravity = -Vector2.Dot(Physics2D.gravity * body.gravityScale, tangent) * Mathf.Sign(move);
+                acceleration += Mathf.Max(0, downhillGravity);
+            }
+            float next = Mathf.MoveTowards(along, target, acceleration * Time.fixedDeltaTime);
+            velocity += tangent * (next - along);
+            return true;
+        }
+        void RefreshFreezeState()
+        {
+            frozen = manualFrozen || forcedFrozen;
+            jumpBoostRemaining = dashRemaining = 0;
+            var bodyType = manualFrozen && !forcedFrozen ? RigidbodyType2D.Kinematic : RigidbodyType2D.Dynamic;
+            if (body.bodyType == bodyType) return;
+            body.bodyType = bodyType;
+            body.gravityScale = settings.gravityScale;
+            body.linearVelocity = Vector2.zero;
+            body.angularVelocity = 0;
+        }
+        void SetNitrogenFreeze(bool value)
+        {
+            if (forcedFrozen == value) return;
+            forcedFrozen = value;
+            if (value && iceMaterial == null)
+            {
+                iceMaterial = new PhysicsMaterial2D("Nitrogen ice")
+                {
+                    friction = 0f,
+                    frictionCombine = PhysicsMaterialCombine2D.Minimum,
+                    bounciness = 0f
+                };
+            }
+            RefreshFreezeState();
+            body.mass = settings.playerMass * (value ? NitrogenMassMultiplier : 1f);
+            RefreshSurfaceMaterial();
+        }
+        void RefreshSurfaceMaterial()
+        {
+            if (shapeCollider == null) return;
+            var material = forcedFrozen ? iceMaterial : oilUntil > 0 ? oilMaterial : normalMaterial;
+            if (shapeCollider.sharedMaterial != material) shapeCollider.sharedMaterial = material;
         }
         public void ForceFreeze(float seconds)
         {
             if (!authority || seconds <= 0) return;
-            forcedFreezeUntil = Mathf.Max(forcedFreezeUntil, Time.time + seconds); forcedFrozen = true; SetFrozen(true);
+            forcedFreezeUntil = Mathf.Max(forcedFreezeUntil, Time.time + seconds);
+            SetNitrogenFreeze(true);
         }
         public void Stun(float seconds)
         {
@@ -115,26 +193,34 @@ namespace ShapeCoop
         public void TouchOil(PhysicsMaterial2D material)
         {
             if (!authority) return;
-            oilUntil = Time.fixedTime + Time.fixedDeltaTime * 2.5f; shapeCollider.sharedMaterial = material;
+            oilUntil = Time.fixedTime + Time.fixedDeltaTime * 2.5f;
+            oilMaterial = material;
+            RefreshSurfaceMaterial();
         }
         void FixedUpdate()
         {
             if (!authority) return;
-            if (oilUntil > 0 && Time.fixedTime > oilUntil) { oilUntil = 0; shapeCollider.sharedMaterial = normalMaterial; }
-            if (forcedFrozen && Time.time >= forcedFreezeUntil) { forcedFrozen = false; SetFrozen(manualFrozen); }
+            if (oilUntil > 0 && Time.fixedTime > oilUntil)
+            {
+                oilUntil = 0;
+                oilMaterial = null;
+                RefreshSurfaceMaterial();
+            }
+            if (forcedFrozen && Time.time >= forcedFreezeUntil) SetNitrogenFreeze(false);
             stunned = Time.time < stunnedUntil;
             if (freezePending)
             {
                 freezePending = false;
-                if (!forcedFrozen && (!stunned || manualFrozen)) { manualFrozen = !manualFrozen; SetFrozen(manualFrozen); }
+                if (!forcedFrozen && (!stunned || manualFrozen)) { manualFrozen = !manualFrozen; RefreshFreezeState(); }
                 else if (manualFrozen) manualFrozen = false;
             }
             if (frozen) { jumpPending = dashPending = false; return; }
             if (stunned) { jumpPending = dashPending = false; jumpBoostRemaining = dashRemaining = 0; return; }
-            bool onCrane = TryGetCraneVelocity(out Vector2 craneVelocity);
+            int contactCount = shapeCollider.GetContacts(groundContacts);
+            bool onCrane = TryGetCraneVelocity(contactCount, out Vector2 craneVelocity);
             if (Mathf.Abs(move) > .01f) facing = move < 0 ? -1 : 1;
             // Process a jump first so a dash on the same physics tick keeps it.
-            bool jumped = jumpPending && Grounded();
+            bool jumped = jumpPending && Grounded(contactCount);
             if (jumped)
             {
                 body.AddForce(Vector2.up * settings.jumpImpulse, ForceMode2D.Impulse);
@@ -178,7 +264,8 @@ namespace ShapeCoop
             {
                 float targetX = move * settings.moveSpeed;
                 if (onCrane && Mathf.Abs(move) < .01f) targetX = craneVelocity.x;
-                v.x = Mathf.MoveTowards(v.x, targetX, settings.moveAcceleration * Time.fixedDeltaTime);
+                bool handledSlope = !onCrane && !jumped && Mathf.Abs(move) > .01f && TryWalkAlongSlope(contactCount, ref v);
+                if (!handledSlope) v.x = Mathf.MoveTowards(v.x, targetX, settings.moveAcceleration * Time.fixedDeltaTime);
                 if (onCrane && !jumped && craneVelocity.y < 0 && v.y <= .1f) v.y = Mathf.Min(v.y, craneVelocity.y);
             }
             else if (Mathf.Abs(move) > .01f) v.x = Mathf.MoveTowards(v.x, move * settings.moveSpeed, settings.moveAcceleration * .08f * Time.fixedDeltaTime);
@@ -186,6 +273,7 @@ namespace ShapeCoop
             jumpPending = dashPending = false;
         }
         void OnDisable() { if (authority && body != null) { dashRemaining = 0; body.gravityScale = settings.gravityScale; } }
+        void OnDestroy() { if (iceMaterial != null) Destroy(iceMaterial); }
         void Update()
         {
             if (authority) return;

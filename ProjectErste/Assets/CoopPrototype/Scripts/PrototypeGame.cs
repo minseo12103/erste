@@ -17,13 +17,15 @@ namespace ShapeCoop
         readonly Dictionary<string, PrototypePlayer> players = new Dictionary<string, PrototypePlayer>();
         GameObject world; Rigidbody2D ball; Vector2 ballTarget; float ballAngle;
         MapGimmick[] gimmicks = Array.Empty<MapGimmick>();
+        MapDynamicBodies mapBodies;
         const float BallStartX = -3.8f, BallStartY = 1.1f;
         Vector2 ballSpawn;
         bool authoredMap;
         Vector3 initialCameraPosition;
         readonly PrototypeClock clock = new PrototypeClock();
         double elapsed, nextSnapshot; bool completed; int epoch, snapshotSequence, lastSnapshot;
-        int jump, dash, freeze; float inputMove; Vector2 roomScroll;
+        int jump, dash, freeze; float inputMove;
+        readonly GameFrontEnd frontEnd = new GameFrontEnd();
         readonly EmoteInputReader emoteInput = new EmoteInputReader();
         double pendingDashAt = -1;
         PhysicsMaterial2D ballMaterial;
@@ -40,6 +42,7 @@ namespace ShapeCoop
                 {
                     nextSnapshot = Time.realtimeSinceStartupAsDouble + 1.0 / Mathf.Max(1, settings.snapshotsPerSecond);
                     session.Broadcast(Snapshot("state"), false);
+                    BroadcastMapBodies(false);
                 }
             }
             else if (ball != null)
@@ -47,6 +50,7 @@ namespace ShapeCoop
                 float t = 1f - Mathf.Exp(-settings.interpolationSpeed * Time.deltaTime);
                 ball.transform.position = Vector3.Lerp(ball.transform.position, ballTarget, t);
                 ball.transform.rotation = Quaternion.Lerp(ball.transform.rotation, Quaternion.Euler(0,0,ballAngle), t);
+                mapBodies?.Interpolate(t);
             }
             var keyboard = Keyboard.current;
             if (keyboard == null) return;
@@ -96,6 +100,11 @@ namespace ShapeCoop
                 return;
             }
             if (from != session.Host) return;
+            if (p.kind == "map_bodies")
+            {
+                if (session.Playing && p.epoch == epoch) mapBodies?.Apply(p.mapBodyOffset, p.mapBodies, p.sequence, false);
+                return;
+            }
             if (p.kind == "start" && !session.Playing)
             {
                 session.Playing = true; epoch = p.epoch; emoteInput.Reset(); BuildWorld(p.players, false); ApplyState(p, true); return;
@@ -118,7 +127,7 @@ namespace ShapeCoop
             SteamMatchmaking.SetLobbyJoinable(session.Lobby, false);
             session.Playing = true; epoch++; snapshotSequence = lastSnapshot = 0; jump = dash = freeze = 0; emoteInput.Reset();
             BuildWorld(data, true); completed = false; elapsed = 0; clock.Begin(Time.realtimeSinceStartupAsDouble);
-            session.Broadcast(Snapshot("start"));
+            session.Broadcast(Snapshot("start")); BroadcastMapBodies(true);
         }
         void BuildWorld(PlayerData[] data, bool host)
         {
@@ -128,6 +137,7 @@ namespace ShapeCoop
             bool haveSections = MapSectionAssembler.Build(mapSections, world.transform, BallReachedGoal, out Vector2? playerMarker, out Vector2? ballMarker);
             gimmicks = world.GetComponentsInChildren<MapGimmick>(true);
             foreach (var gimmick in gimmicks) gimmick.Initialize(host);
+            mapBodies = new MapDynamicBodies(world.transform, gimmicks, host);
             if (playerMarker.HasValue) playerStart = playerMarker.Value;
             if (ballMarker.HasValue) ballSpawn = ballMarker.Value;
             authoredMap = haveSections;
@@ -169,12 +179,13 @@ namespace ShapeCoop
             PrototypeVisuals.Shape(goal.transform, 1, new Color(.25f,.9f,.38f,.3f), trigger.size, 0);
             var goalScript = goal.AddComponent<PrototypeGoal>(); goalScript.game = this;
         }
-        void ClearWorld() { if (world != null) Destroy(world); if (ballMaterial != null) Destroy(ballMaterial); if (authoredMap && Camera.main != null) Camera.main.transform.position = initialCameraPosition; authoredMap = false; ballMaterial = null; world = null; players.Clear(); ball = null; gimmicks = Array.Empty<MapGimmick>(); pendingDashAt = -1; }
+        void ClearWorld() { if (world != null) Destroy(world); if (ballMaterial != null) Destroy(ballMaterial); if (authoredMap && Camera.main != null) Camera.main.transform.position = initialCameraPosition; authoredMap = false; ballMaterial = null; world = null; players.Clear(); ball = null; gimmicks = Array.Empty<MapGimmick>(); mapBodies = null; pendingDashAt = -1; }
         public static PhysicsMaterial2D CreateBallMaterial(PrototypeSettings s) => new PhysicsMaterial2D("Goal ball bounce") { bounciness = Mathf.Clamp01(s.ballBounciness), friction = .2f };
         void ResetPositions()
         {
             foreach (var player in players.Values) player.ResetBody();
             foreach (var gimmick in gimmicks) gimmick.ResetGimmick();
+            mapBodies?.Reset();
             if (ball != null) ball.GetComponent<MapGoalBall>()?.ResetEffects();
             if (session.IsHost) { ball.position = ballSpawn; ball.rotation = 0; ball.linearVelocity = Vector2.zero; ball.angularVelocity = 0; }
             else { ball.transform.position = ballSpawn; ball.transform.rotation = Quaternion.identity; }
@@ -184,7 +195,7 @@ namespace ShapeCoop
         {
             if (!session.IsHost || !session.Playing) return;
             epoch++; snapshotSequence = 0; jump = dash = freeze = 0; inputMove = 0; pendingDashAt = -1; emoteInput.Reset(); ResetPositions();
-            session.Broadcast(Snapshot("reset"));
+            session.Broadcast(Snapshot("reset")); BroadcastMapBodies(true);
         }
         public void BallReachedGoal(Collider2D other)
         {
@@ -199,9 +210,16 @@ namespace ShapeCoop
             var states = new GimmickData[gimmicks.Length]; for (int j = 0; j < gimmicks.Length; j++) states[j] = gimmicks[j].Capture(j);
             return new Packet { kind = kind, epoch = epoch, sequence = ++snapshotSequence, elapsed = elapsed, completed = completed, players = data, ball = new BodyData { x = ball.position.x, y = ball.position.y, angle = ball.rotation }, gimmicks = states };
         }
+        void BroadcastMapBodies(bool reliable)
+        {
+            if (mapBodies == null) return;
+            for (int offset = 0; offset < mapBodies.Count; offset += MapDynamicBodies.ChunkSize)
+                session.Broadcast(new Packet { kind = "map_bodies", epoch = epoch, sequence = snapshotSequence, mapBodyOffset = offset, mapBodies = mapBodies.Capture(offset) }, reliable);
+        }
         void ApplyState(Packet p, bool snap)
         {
             lastSnapshot = p.sequence; elapsed = p.elapsed; completed = p.completed;
+            if (p.kind == "reset") mapBodies?.Reset();
             var present = new HashSet<string>();
             if (p.players != null) foreach (var item in p.players) { present.Add(item.id); if (players.TryGetValue(item.id, out var player)) player.Apply(item.body, snap); }
             var remove = new List<string>(); foreach (var id in players.Keys) if (!present.Contains(id)) remove.Add(id);
@@ -212,6 +230,11 @@ namespace ShapeCoop
         string Clock(double seconds) { var t = TimeSpan.FromSeconds(Math.Max(0, seconds)); return string.Format("{0:00}:{1:00}.{2:00}", (int)t.TotalMinutes, t.Seconds, t.Milliseconds / 10); }
         void OnGUI()
         {
+            if (!session.Playing)
+            {
+                frontEnd.Draw(session, StartGame);
+                return;
+            }
             if (title == null) { title = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold }; label = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true }; }
             GUI.Box(new Rect(10, 10, 420, session.Playing ? 185 : Mathf.Min(Screen.height - 20, 600)), "");
             GUILayout.BeginArea(new Rect(22, 18, 396, Screen.height - 36));
@@ -222,40 +245,6 @@ namespace ShapeCoop
                 GUILayout.Label("1 / 2 / 3 emotes   Mouse: aim", label);
                 if (GUILayout.Button("Restart from start", GUILayout.Height(32))) { if (session.IsHost) Restart(); else session.Send(session.Host, new Packet { kind = "restart" }); }
                 if (GUILayout.Button("Leave room", GUILayout.Height(27))) session.Leave();
-            }
-            else
-            {
-                GUILayout.Label("SHAPE CO-OP", title); GUILayout.Label(session.Status, label);
-                if (session.Available) GUILayout.Label(session.OverlayReady ? "Steam overlay: ready (Shift + Tab)" : "Steam overlay unavailable or loading. Enable it in Steam and launch the build through Steam.", label);
-                if (!session.InLobby)
-                {
-                    GUI.enabled = session.Available;
-                    if (GUILayout.Button("Create room", GUILayout.Height(34))) session.CreateRoom();
-                    if (GUILayout.Button("Find rooms", GUILayout.Height(34))) session.FindRooms();
-                    roomScroll = GUILayout.BeginScrollView(roomScroll, GUILayout.Height(200));
-                    foreach (var room in session.Rooms)
-                    {
-                        string roomName = SteamMatchmaking.GetLobbyData(room, "name");
-                        if (GUILayout.Button(roomName + "  " + SteamMatchmaking.GetNumLobbyMembers(room) + "/3", GUILayout.Height(30))) session.Join(room);
-                    }
-                    GUILayout.EndScrollView(); GUI.enabled = true;
-                    if (GUILayout.Button("Quit", GUILayout.Height(30))) Application.Quit();
-                }
-                else
-                {
-                    var members = session.Members(); GUILayout.Label("Players " + members.Count + "/3", title);
-                    foreach (var member in members)
-                    {
-                        string state = session.DisplayState(member);
-                        GUILayout.Label(SteamFriends.GetFriendPersonaName(member) + (member == session.Host ? " [HOST]" : "") + " - " + state, label);
-                    }
-                    GUI.enabled = session.OverlayReady;
-                    if (GUILayout.Button("Invite Steam friends", GUILayout.Height(30))) session.InviteFriends();
-                    GUI.enabled = true;
-                    if (session.IsHost) { GUI.enabled = session.CanStart(); if (GUILayout.Button("Start game", GUILayout.Height(36))) StartGame(); GUI.enabled = true; }
-                    else GUILayout.Label("Waiting for host", label);
-                    if (GUILayout.Button("Leave room", GUILayout.Height(30))) session.Leave();
-                }
             }
             GUILayout.EndArea();
             if (session.Playing && Camera.main != null)
@@ -270,6 +259,7 @@ namespace ShapeCoop
                 }
             }
         }
+        void OnDestroy() { frontEnd.Dispose(); }
     }
     public sealed class PrototypeGoal : MonoBehaviour
     {

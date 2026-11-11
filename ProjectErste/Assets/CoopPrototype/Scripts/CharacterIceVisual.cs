@@ -6,7 +6,8 @@ namespace ShapeCoop
     // A visual-only indicator for nitrogen's authoritative forced-freeze state.
     public sealed class CharacterIceVisual : MonoBehaviour
     {
-        const string Sheet = "ShapeCoop/Effects/NitrogenGeyser_Sheet";
+        const string IceSprite = "ShapeCoop/Effects/CharacterIceBlock";
+        const string FallbackSheet = "ShapeCoop/Effects/NitrogenGeyser_Sheet";
         // 1.35 local units at the current 1.2-unit triangle size.
         const float IceWorldSize = 1.62f;
         static Sprite ice;
@@ -16,10 +17,11 @@ namespace ShapeCoop
         public void Initialize(PrototypePlayer owner)
         {
             player = owner;
-            if (ice == null) ice = Array.Find(Resources.LoadAll<Sprite>(Sheet), sprite => sprite.name == "Nitrogen_Ice");
+            if (ice == null) ice = Array.Find(Resources.LoadAll<Sprite>(IceSprite), sprite => sprite.name == "CharacterIceBlock");
+            if (ice == null) ice = Array.Find(Resources.LoadAll<Sprite>(FallbackSheet), sprite => sprite.name == "Nitrogen_Ice");
             if (ice == null) return;
             var obj = new GameObject("Nitrogen ice (visual only)"); obj.transform.SetParent(transform, false);
-            image = obj.AddComponent<SpriteRenderer>(); image.sprite = ice; image.sortingOrder = 0; image.color = new Color(1, 1, 1, .85f); image.enabled = false;
+            image = obj.AddComponent<SpriteRenderer>(); image.sprite = ice; image.sortingOrder = 0; image.color = Color.white; image.enabled = false;
             RefreshSize();
         }
         public void RefreshSize()

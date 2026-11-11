@@ -110,11 +110,11 @@ namespace ShapeCoop.Editor
                 var crane = Make(MapGimmickKind.Crane, "움직이는 타워크레인 빔"); Tick(crane, 10); Check(Mathf.Abs(crane.Capture(0).angle) > 1, "crane did not rotate"); Clear();
 
                 var magnet = Make(MapGimmickKind.Magnet, "산업용 대형 자석"); magnet.inactiveSeconds = .02f; magnet.activeSeconds = 10;
-                ball = Ball(new Vector2(0,-1), Vector2.zero); Physics2D.SyncTransforms(); Tick(magnet, 8); Check(ball.linearVelocity.y > 0, "magnet failed to pull ball upward"); Clear();
+                ball = Ball(new Vector2(0,-2), Vector2.zero); Physics2D.SyncTransforms(); Tick(magnet, 8); Check(ball.linearVelocity.y > 0, "magnet failed to pull ball upward"); Clear();
 
                 var nitrogen = Make(MapGimmickKind.Nitrogen, "액체 질소 가이저"); nitrogen.inactiveSeconds = .02f; nitrogen.activeSeconds = 10;
                 p = Player(new Vector2(0,1)); Physics2D.SyncTransforms(); Tick(nitrogen, 6, p);
-                Check(p.forcedFrozen && p.body.bodyType == RigidbodyType2D.Kinematic, "nitrogen did not force freeze"); p.ResetBody(); Check(!p.frozen && !p.forcedFrozen, "forced freeze did not reset"); Clear();
+                Check(p.forcedFrozen && p.body.bodyType == RigidbodyType2D.Dynamic, "nitrogen did not force freeze into a dynamic body"); p.ResetBody(); Check(!p.frozen && !p.forcedFrozen, "forced freeze did not reset"); Clear();
 
                 var sparks = Make(MapGimmickKind.Sparks, "용접 스파크 구역"); sparks.inactiveSeconds = .02f; sparks.activeSeconds = 10;
                 var shield = Player(new Vector2(0,-1)); var behind = Player(new Vector2(0,-3)); Physics2D.SyncTransforms(); Tick(sparks, 8, shield, behind);
@@ -126,10 +126,13 @@ namespace ShapeCoop.Editor
                 typeof(PrototypePlayer).GetMethod("FixedUpdate", Private).Invoke(fixedPlayer, null);
                 Check(!fixedPlayer.frozen, "stun prevented releasing an existing manual freeze"); Clear();
 
-                var water = Make(MapGimmickKind.Sprinkler, "수압 장벽"); var triangle = Player(new Vector2(-.55f,-1), 0); triangle.freezePending = true;
-                var covered = Ball(new Vector2(-.55f,-2.5f), Vector2.zero); var exposed = Ball(new Vector2(.75f,-2.5f), Vector2.zero);
-                Physics2D.SyncTransforms(); Tick(water, 8, triangle);
-                Check(exposed.linearVelocity.y < -.2f && covered.linearVelocity.y > exposed.linearVelocity.y + .1f && water.Capture(0).shielded, "triangle did not shield ball from water"); Clear();
+                var water = Make(MapGimmickKind.Sprinkler, "수압 장벽"); var triangle = Player(new Vector2(0, -1), 0); triangle.freezePending = true;
+                Physics2D.SyncTransforms(); Tick(water, 2, triangle);
+                var sample = WaterBarrierVerification.RightFlowSample(water);
+                var covered = Ball(new Vector2(0, sample.y), Vector2.zero); var exposed = Ball(sample, Vector2.zero);
+                covered.GetComponent<CircleCollider2D>().radius = exposed.GetComponent<CircleCollider2D>().radius = .04f;
+                Physics2D.SyncTransforms(); Tick(water, 4, triangle);
+                Check(exposed.linearVelocity.y < -.2f && covered.linearVelocity.sqrMagnitude < .0001f && water.Capture(0).shielded, "ball force did not follow the visible water branch"); Clear();
 
                 var host = Make(MapGimmickKind.BrickWall, "부실공사 벽돌 벽"); var copy = Object.Instantiate(host.gameObject); var client = copy.GetComponent<MapGimmick>(); client.Initialize(false);
                 var state = host.Capture(0); state.broken = true;

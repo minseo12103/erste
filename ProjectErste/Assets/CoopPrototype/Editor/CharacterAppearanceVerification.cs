@@ -49,9 +49,6 @@ namespace ShapeCoop.Editor
                     Check(player.GetComponentInChildren<PrototypeCharacterAppearance>() != null && player.GetComponentInChildren<PrototypeCharacterAppearance>().transform.Find("Helmet") != null, "comparison character missing artwork");
                     Check((i == 0 && player.shapeCollider is PolygonCollider2D) || (i == 1 && player.shapeCollider is BoxCollider2D) || (i == 2 && player.shapeCollider is CircleCollider2D), "comparison collider mismatch");
                 }
-                var reviewField = typeof(CharacterComparisonWindow).GetField("iceReviewSprite", BindingFlags.NonPublic | BindingFlags.Instance);
-                var review = (Sprite)reviewField.GetValue(window);
-                if (Array.IndexOf(Environment.GetCommandLineArgs(), "-requireIceReview") >= 0) Check(review != null, "optional ice review image failed to load");
                 var draw = typeof(CharacterComparisonWindow).GetMethod("ShouldDrawRenderer", BindingFlags.NonPublic | BindingFlags.Static);
                 for (int i = 0; i < players.Length; i++)
                 {
@@ -61,18 +58,8 @@ namespace ShapeCoop.Editor
                     var stun = root.Find("Stun outline core").GetComponent<SpriteRenderer>();
                     Check(!stun.enabled && !(bool)draw.Invoke(null, new object[] { stun, true, true }), "disabled status artwork shown in comparison");
                     Check(Mathf.Abs(ice.sprite.bounds.size.x * ice.transform.lossyScale.x - 1.62f) < .001f && Mathf.Abs(ice.sprite.bounds.size.y * ice.transform.lossyScale.y - 1.62f) < .001f, "comparison ice sizes differ");
-                    if (review != null) Check(ice.sprite == review, "comparison did not show the review artwork");
+                    Check(ice.sprite.name == "CharacterIceBlock" && AssetDatabase.GetAssetPath(ice.sprite) == "Assets/Resources/ShapeCoop/Effects/CharacterIceBlock.png" && ice.color == Color.white, "comparison does not show the applied ice artwork");
                 }
-                var useReview = typeof(CharacterComparisonWindow).GetField("showIceReview", BindingFlags.NonPublic | BindingFlags.Instance);
-                useReview.SetValue(window, false); typeof(CharacterComparisonWindow).GetMethod("UpdatePreview", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, null);
-                foreach (var player in players)
-                {
-                    var ice = player.GetComponentInChildren<PrototypeCharacterAppearance>().transform.Find("Nitrogen ice (visual only)").GetComponent<SpriteRenderer>();
-                    Check(ice.sprite != null && ice.sprite.name == "Nitrogen_Ice", "comparison could not restore current game artwork");
-                }
-                useReview.SetValue(window, true); typeof(CharacterComparisonWindow).GetMethod("UpdatePreview", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, null);
-                if (review != null)
-                    foreach (var player in players) Check(player.GetComponentInChildren<PrototypeCharacterAppearance>().transform.Find("Nitrogen ice (visual only)").GetComponent<SpriteRenderer>().sprite == review, "comparison did not switch back to the review artwork");
                 var applied = AssetDatabase.LoadAssetAtPath<CharacterLayout>(CharacterComparisonWindow.LayoutPath);
                 var before = applied == null ? CharacterShapeLayout.Default : applied.ForShape(0);
                 var draftField = typeof(CharacterComparisonWindow).GetField("draft", BindingFlags.NonPublic | BindingFlags.Instance);
