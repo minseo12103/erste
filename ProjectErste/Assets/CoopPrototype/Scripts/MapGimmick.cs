@@ -19,6 +19,8 @@ namespace ShapeCoop
         [Min(0f)] public float effectSeconds = 1.5f;
         [Min(0f)] public float impactSpeed = 8f;
         [Header("Sand animation")]
+        [Min(.58f), Tooltip("Seconds after collapse before the sand platform returns.")]
+        public float sandRespawnSeconds = 5f;
         [Tooltip("Four intact/tearing frames followed by four burst/dust frames.")]
         public Sprite[] sandFrames = Array.Empty<Sprite>();
         [Header("Moving parts")]
@@ -41,6 +43,7 @@ namespace ShapeCoop
         Color[] initialColors;
         PhysicsMaterial2D oilMaterial;
         SpriteRenderer sandRenderer;
+        float sandDisplayCollapseDelay, sandDisplayRespawnDelay;
         WindVentEffect windEffect;
         CementImpactVisual cementVisual;
         WeldingSparkVisual weldingVisual;
@@ -56,6 +59,7 @@ namespace ShapeCoop
         float progressReceivedAt;
         readonly HashSet<Rigidbody2D> windBodiesThisStep = new HashSet<Rigidbody2D>();
         const float SandBurstDuration = .58f;
+        const float PlayerWindAngularSpeedLimit = 180f;
 
         public void Initialize(bool host)
         {
@@ -64,6 +68,8 @@ namespace ShapeCoop
             initialColors = new Color[renderers.Length]; for (int i = 0; i < renderers.Length; i++) initialColors[i] = renderers[i].color;
             var sandVisual = kind == MapGimmickKind.Sand && visual != null ? visual.Find("Sand") : null;
             sandRenderer = sandVisual != null ? sandVisual.GetComponent<SpriteRenderer>() : null;
+            sandDisplayCollapseDelay = Mathf.Max(.02f, activationDelay);
+            sandDisplayRespawnDelay = Mathf.Max(SandBurstDuration, sandRespawnSeconds);
             windEffect = kind == MapGimmickKind.Vent && visual != null ? visual.GetComponentInChildren<WindVentEffect>(true) : null;
             cementVisual = kind == MapGimmickKind.Cement && visual != null ? visual.GetComponentInChildren<CementImpactVisual>(true) : null;
             weldingVisual = kind == MapGimmickKind.Sparks && visual != null ? visual.GetComponentInChildren<WeldingSparkVisual>(true) : null;
@@ -128,8 +134,10 @@ namespace ShapeCoop
             if (kind == MapGimmickKind.Sand && triggered)
             {
                 float delay = Mathf.Max(.02f, activationDelay);
-                timer = Mathf.Min(timer + dt, delay + SandBurstDuration);
+                float respawnDelay = Mathf.Max(SandBurstDuration, sandRespawnSeconds);
+                timer += dt;
                 if (!broken && timer >= delay) { broken = true; if (solid != null) solid.enabled = false; }
+                if (broken && timer - delay >= respawnDelay) ResetGimmick();
             }
             if (kind == MapGimmickKind.Sprinkler) timer = Mathf.Repeat(timer + dt, 120f);
             if (kind == MapGimmickKind.BrickWall && broken && brickVisual != null) timer = Mathf.Min(timer + dt, brickVisual.Duration);
@@ -313,7 +321,25 @@ namespace ShapeCoop
                 var area = solid.bounds; var target = other.bounds;
                 float lo = Mathf.Max(area.min.x, target.min.x), hi = Mathf.Min(area.max.x, target.max.x);
                 float contactX = lo <= hi ? (lo + hi) * .5f : rb.worldCenterOfMass.x;
-                rb.AddForceAtPosition((Vector2)direction.normalized * force, new Vector2(contactX, rb.worldCenterOfMass.y));
+                var windForce = (Vector2)direction.normalized * force;
+                var center = rb.worldCenterOfMass;
+                if (!rb.TryGetComponent<PrototypePlayer>(out _))
+                {
+                    rb.AddForceAtPosition(windForce, new Vector2(contactX, center.y));
+                    return;
+                }
+
+                // Keep the lift unchanged, but limit only the rotation added by wind.
+                rb.AddForce(windForce);
+                if (rb.inertia > 0f)
+                {
+                    float current = rb.angularVelocity;
+                    float windChange = (contactX - center.x) * windForce.y * Time.fixedDeltaTime * Mathf.Rad2Deg / rb.inertia;
+                    // Do not erase faster rotation that came from an impact or another source.
+                    float min = Mathf.Min(-PlayerWindAngularSpeedLimit, current);
+                    float max = Mathf.Max(PlayerWindAngularSpeedLimit, current);
+                    rb.angularVelocity = Mathf.Clamp(current + windChange, min, max);
+                }
                 return;
             }
             var player = rb.GetComponent<PrototypePlayer>(); var ball = rb.GetComponent<MapGoalBall>();
@@ -341,12 +367,17 @@ namespace ShapeCoop
                 cranePlatforms.Apply(angle, snap);
             }
         }
+        static int SandTearFrame(float progress)
+            => progress < .9f / 1.95f ? 0 : progress < 1.2f / 1.95f ? 1 : progress < 1.55f / 1.95f ? 2 : 3;
+        static int SandBurstFrame(float burst)
+            => burst < .08f ? 4 : burst < .18f ? 5 : burst < .34f ? 6 : 7;
+
         void RefreshVisual()
         {
             bool animatedSand = kind == MapGimmickKind.Sand && sandRenderer != null && sandFrames != null && sandFrames.Length >= 8;
             if (animatedSand)
             {
-                float delay = Mathf.Max(.02f, activationDelay);
+                float delay = authority ? Mathf.Max(.02f, activationDelay) : sandDisplayCollapseDelay;
                 float displayTime = timer;
                 if (!authority && triggered) displayTime += Mathf.Max(0, Time.time - progressReceivedAt);
                 if (!broken) displayTime = Mathf.Min(displayTime, delay - .0001f);
@@ -355,12 +386,36 @@ namespace ShapeCoop
                 else if (!broken)
                 {
                     float p = Mathf.Clamp01(displayTime / delay);
-                    frame = p < .9f / 1.95f ? 0 : p < 1.2f / 1.95f ? 1 : p < 1.55f / 1.95f ? 2 : 3;
+                    frame = SandTearFrame(p);
                 }
                 else
                 {
                     float burst = Mathf.Max(0, displayTime - delay);
-                    frame = displayTime + .0001f >= delay + SandBurstDuration ? -1 : burst < .08f ? 4 : burst < .18f ? 5 : burst < .34f ? 6 : 7;
+                    float respawnDelay = authority ? Mathf.Max(SandBurstDuration, sandRespawnSeconds) : sandDisplayRespawnDelay;
+                    // Short delays share their time between the burst and the reverse animation.
+                    float burstDuration = Mathf.Min(SandBurstDuration, respawnDelay * .5f);
+                    float originalReverseDuration = SandBurstDuration + delay * (1f - .9f / 1.95f);
+                    float reverseDuration = Mathf.Min(originalReverseDuration, respawnDelay - burstDuration);
+                    float reverseStart = respawnDelay - reverseDuration;
+                    if (burst < burstDuration)
+                    {
+                        float originalBurst = burst * SandBurstDuration / burstDuration;
+                        frame = SandBurstFrame(originalBurst);
+                    }
+                    else if (burst < reverseStart) frame = -1;
+                    else if (reverseDuration >= originalReverseDuration)
+                    {
+                        // Replay each original frame for the same duration, backwards.
+                        float originalTime = delay + SandBurstDuration - (burst - reverseStart);
+                        frame = originalTime >= delay ? SandBurstFrame(originalTime - delay) :
+                            Mathf.Max(1, SandTearFrame(Mathf.Clamp01(originalTime / delay)));
+                    }
+                    else
+                    {
+                        // Very short respawn delays compress the reverse sequence evenly.
+                        float progress = Mathf.Clamp01((burst - reverseStart) / reverseDuration);
+                        frame = 7 - Mathf.Min(6, Mathf.FloorToInt(progress * 7f));
+                    }
                 }
                 sandRenderer.sprite = frame >= 0 ? sandFrames[frame] : null;
             }
@@ -415,6 +470,13 @@ namespace ShapeCoop
                 state.offset = blocker.Shape;
                 state.angle = blocker.Angle;
             }
+            if (kind == MapGimmickKind.Sand)
+            {
+                // Sand reuses the otherwise-unused water coordinates for visual timing;
+                // a negative first value distinguishes these snapshots from older peers.
+                state.shieldX = -Mathf.Max(.02f, activationDelay);
+                state.shieldY = Mathf.Max(SandBurstDuration, sandRespawnSeconds);
+            }
             if (kind == MapGimmickKind.Nitrogen) state.nitrogenActiveSeconds = Mathf.Max(.02f, activeSeconds);
             if (cementVisual != null) cementVisual.WriteState(state);
             if (cranePlatforms != null)
@@ -427,6 +489,12 @@ namespace ShapeCoop
         public void Apply(GimmickData state, bool snap)
         {
             if (state == null || authority) return;
+            if (kind == MapGimmickKind.Sand && float.IsFinite(state.shieldX) && state.shieldX <= -.02f &&
+                float.IsFinite(state.shieldY) && state.shieldY >= SandBurstDuration)
+            {
+                sandDisplayCollapseDelay = -state.shieldX;
+                sandDisplayRespawnDelay = state.shieldY;
+            }
             if (kind == MapGimmickKind.Nitrogen && state.nitrogenActiveSeconds >= .02f && !float.IsInfinity(state.nitrogenActiveSeconds)) nitrogenDisplayDuration = state.nitrogenActiveSeconds;
             if (cranePlatforms != null && state.hasCraneDimensions)
             {

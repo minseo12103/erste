@@ -67,6 +67,22 @@ namespace ShapeCoop.Editor
             int row = (vertices.Length / 2 - 1) * 3 / 4;
             return branch.TransformPoint((vertices[row * 2] + vertices[row * 2 + 1]) * .5f);
         }
+        static bool JunctionOverlaps(MeshRenderer main, MeshRenderer branch)
+        {
+            var incoming = main.GetComponent<MeshFilter>().sharedMesh.bounds;
+            var outgoing = branch.GetComponent<MeshFilter>().sharedMesh.bounds;
+            float overlapY = Mathf.Min(incoming.max.y, outgoing.max.y) - Mathf.Max(incoming.min.y, outgoing.min.y);
+            float overlapX = Mathf.Min(incoming.max.x, outgoing.max.x) - Mathf.Max(incoming.min.x, outgoing.min.x);
+            return overlapY > .01f && overlapX > .01f;
+        }
+        static float WaterTextureAtHeight(MeshRenderer renderer, float height)
+        {
+            var mesh = renderer.GetComponent<MeshFilter>().sharedMesh;
+            var vertices = mesh.vertices;
+            var uv = mesh.uv;
+            int bottom = vertices.Length - 1;
+            return Mathf.Lerp(uv[bottom].y, uv[0].y, Mathf.InverseLerp(vertices[bottom].y, vertices[0].y, height));
+        }
         static void Tick()
         {
             if (!ready || !EditorApplication.isPlaying) return;
@@ -99,9 +115,15 @@ namespace ShapeCoop.Editor
                 var left = host.transform.Find("Water left flow (runtime)").GetComponent<MeshRenderer>();
                 var right = host.transform.Find("Water right flow (runtime)").GetComponent<MeshRenderer>();
                 Check(visual.splash.sprite != null && visual.split.sprite == null && left.enabled && right.enabled, "shielded water did not split visually");
+                Check(JunctionOverlaps(mainFlow, left) && JunctionOverlaps(mainFlow, right), "water branches did not overlap the incoming flow at the junction");
                 remote.Apply(state, true);
                 Check(other.splash.sprite == visual.splash.sprite && Vector2.Distance(RightFlowSample(remote) - (Vector2)remote.transform.position, sample) < .01f,
                     "client shield appearance disagrees with host");
+                float textureSampleY = mainFlow.GetComponent<MeshFilter>().sharedMesh.bounds.max.y - .1f;
+                float textureBeforeMove = WaterTextureAtHeight(mainFlow, textureSampleY);
+                triangle.body.position = new Vector2(0, -2); Step(host, 2, triangle);
+                Check(Mathf.Abs(WaterTextureAtHeight(mainFlow, textureSampleY) - textureBeforeMove) < .001f,
+                    "incoming water texture stretched when the impact moved");
                 if (Array.IndexOf(Environment.GetCommandLineArgs(), "-waterCapture") >= 0)
                 {
                     triangle.body.position = new Vector2(-.2f, -2); covered.position = new Vector2(-.55f, -3.5f); exposed.position = new Vector2(.75f, -3.5f);
@@ -109,6 +131,7 @@ namespace ShapeCoop.Editor
                 }
                 triangle.body.position = new Vector2(-1.12f, -1); Step(host, 2, triangle);
                 Check(host.Capture(0).shielded && !left.enabled && right.enabled, "shield at barrier edge did not produce a single-sided flow");
+                Check(JunctionOverlaps(mainFlow, right), "single-sided water flow lost its junction overlap");
                 Object.DestroyImmediate(triangle.gameObject); Object.DestroyImmediate(covered.gameObject); Object.DestroyImmediate(exposed.gameObject); Physics2D.SyncTransforms();
                 Step(host, 2); Check(!host.Capture(0).shielded && visual.splash.sprite == null && visual.split.sprite == null && !left.enabled && !right.enabled, "water did not restore after shield left");
                 var square = Player(settings, 1, new Vector2(0, -2)); Step(host, 8, square); Check(!square.stunned, "water must not stun the player");

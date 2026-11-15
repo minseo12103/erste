@@ -19,7 +19,7 @@ namespace ShapeCoop.Editor
 
         static readonly string[] TuningProperties =
         {
-            nameof(MapGimmick.activationDelay), nameof(MapGimmick.force),
+            nameof(MapGimmick.activationDelay), nameof(MapGimmick.sandRespawnSeconds), nameof(MapGimmick.force),
             nameof(MapGimmick.activeSeconds), nameof(MapGimmick.inactiveSeconds),
             nameof(MapGimmick.effectSeconds), nameof(MapGimmick.impactSpeed),
             nameof(MapGimmick.pulleySpeed), nameof(MapGimmick.rotationSpeed)
@@ -278,6 +278,14 @@ namespace ShapeCoop.Editor
                 EditorGUI.BeginChangeCheck();
                 Vector2 nextScale = EditorGUILayout.Vector2Field(new GUIContent("오브젝트 배율 (X, Y)", "그림과 충돌체를 함께 확대하거나 축소합니다."), new Vector2(scale.x, scale.y));
                 if (EditorGUI.EndChangeCheck()) ApplyScale(gimmick, nextScale);
+                if (gimmick.kind == MapGimmickKind.Sand)
+                {
+                    using var serialized = new SerializedObject(gimmick);
+                    serialized.Update();
+                    EditorGUILayout.PropertyField(serialized.FindProperty(nameof(MapGimmick.sandRespawnSeconds)),
+                        new GUIContent("재생성 대기 시간 (초)", "모래 상자가 무너진 시점부터 다시 생길 때까지의 시간입니다."));
+                    if (serialized.ApplyModifiedProperties()) MarkChanged(gimmick, new Object[] { gimmick });
+                }
                 if (gimmick.kind == MapGimmickKind.Sparks)
                 {
                     EditorGUI.BeginChangeCheck();

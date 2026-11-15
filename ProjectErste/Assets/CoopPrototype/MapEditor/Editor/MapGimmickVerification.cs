@@ -78,9 +78,14 @@ namespace ShapeCoop.Editor
             var previous = Physics2D.simulationMode; Physics2D.simulationMode = SimulationMode2D.Script;
             try
             {
-                var sand = Make(MapGimmickKind.Sand, "무너지는 모래 상자"); sand.activationDelay = .12f;
+                var sand = Make(MapGimmickKind.Sand, "무너지는 모래 상자"); sand.activationDelay = .12f; sand.sandRespawnSeconds = .8f;
                 var p = Player(new Vector2(0, 1.02f)); p.body.gravityScale = 1; Physics2D.SyncTransforms(); Tick(sand, 35, p);
-                Check(sand.Capture(0).broken, "sand did not collapse after player contact"); sand.ResetGimmick(); Check(!sand.Capture(0).broken && sand.GetComponent<Collider2D>().enabled, "sand restart failed"); Clear();
+                Check(sand.Capture(0).broken, "sand did not collapse after player contact");
+                Tick(sand, 15, p);
+                Check(!sand.Capture(0).broken && sand.GetComponent<Collider2D>().enabled, "sand did not automatically respawn after player contact");
+                Tick(sand, 12, p);
+                Check(sand.Capture(0).broken, "respawned sand did not collapse again on player contact");
+                sand.ResetGimmick(); Check(!sand.Capture(0).broken && sand.GetComponent<Collider2D>().enabled, "sand restart failed"); Clear();
 
                 sand = Make(MapGimmickKind.Sand, "무너지는 모래 상자"); sand.activationDelay = .12f;
                 var sandBall = Ball(new Vector2(0, 1.12f), Vector2.down * 2); Physics2D.SyncTransforms(); Tick(sand, 35);

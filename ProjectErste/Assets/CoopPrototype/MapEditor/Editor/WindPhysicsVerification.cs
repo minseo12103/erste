@@ -59,6 +59,7 @@ namespace ShapeCoop.Editor
                 Physics2D.simulationMode = SimulationMode2D.Script;
                 var wind = Gimmick("공기 환풍구", Vector2.zero, 0, true);
                 var settings = new GameObject("settings").AddComponent<PrototypeSettings>(); settings.gravityScale = 2;
+                CheckPlayerWindRotation(wind, settings);
                 for (int shape = 0; shape < 3; shape++)
                 {
                     var player = Player(settings, shape, new Vector2(0, 1.5f)); Step(wind, 10, player);
@@ -90,6 +91,58 @@ namespace ShapeCoop.Editor
                 Physics2D.simulationMode = oldMode; SessionState.SetBool(Key, false); Debug.Log("SHAPE_WIND_PHYSICS_OK"); EditorApplication.Exit(0);
             }
             catch (Exception e) { Physics2D.simulationMode = oldMode; SessionState.SetBool(Key, false); Debug.LogException(e); EditorApplication.Exit(1); }
+        }
+        static void CheckPlayerWindRotation(MapGimmick wind, PrototypeSettings settings)
+        {
+            for (int shape = 0; shape < 3; shape++)
+            {
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    var position = new Vector2(side * .95f, 2.5f);
+                    var player = Player(settings, shape, position);
+                    player.body.angularDamping = 0;
+                    float peak = 0;
+                    for (int step = 0; step < 250; step++)
+                    {
+                        // Keep the character in the airflow to exercise sustained rotation.
+                        player.body.position = position;
+                        player.body.linearVelocity = Vector2.zero;
+                        Step(wind, 1, player);
+                        peak = Mathf.Max(peak, Mathf.Abs(player.body.angularVelocity));
+                    }
+                    Check(peak > 10 && peak <= 180.1f, "wind spin limit failed for shape " + shape + " side " + side + ": " + peak);
+                    Object.DestroyImmediate(player.gameObject);
+                }
+            }
+
+            var overlapping = Gimmick("공기 환풍구", Vector2.zero, 0, true);
+            var sharedPosition = new Vector2(.95f, 2.5f);
+            var sharedPlayer = Player(settings, 1, sharedPosition);
+            sharedPlayer.body.angularDamping = 0;
+            var tick = typeof(MapGimmick).GetMethod("FixedUpdate", Private);
+            for (int step = 0; step < 100; step++)
+            {
+                sharedPlayer.body.position = sharedPosition;
+                sharedPlayer.body.linearVelocity = Vector2.zero;
+                tick.Invoke(overlapping, null);
+                Step(wind, 1, sharedPlayer);
+                Check(Mathf.Abs(sharedPlayer.body.angularVelocity) <= 180.1f, "overlapping vents exceeded player wind spin limit");
+            }
+            Object.DestroyImmediate(sharedPlayer.gameObject);
+            Object.DestroyImmediate(overlapping.gameObject);
+
+            var fastPlayer = Player(settings, 2, sharedPosition);
+            fastPlayer.body.angularDamping = 0;
+            fastPlayer.body.angularVelocity = -260;
+            Step(wind, 2, fastPlayer);
+            Check(fastPlayer.body.angularVelocity < -200 && fastPlayer.body.angularVelocity >= -260.1f,
+                "wind abruptly clamped or accelerated existing fast rotation");
+            fastPlayer.body.position = new Vector2(3, 2.5f);
+            fastPlayer.body.linearVelocity = Vector2.zero;
+            fastPlayer.body.angularVelocity = 240;
+            Step(wind, 3, fastPlayer);
+            Check(Mathf.Abs(fastPlayer.body.angularVelocity - 240) < .1f, "wind spin limit remained after leaving airflow");
+            Object.DestroyImmediate(fastPlayer.gameObject);
         }
         static void CheckDynamicBodyNetwork()
         {
